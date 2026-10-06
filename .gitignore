@@ -218,3 +218,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Pruebas de stress (resultados y targets generados; ver tests/stress/README.md)
+tests/stress/out/
+tests/stress/targets/
