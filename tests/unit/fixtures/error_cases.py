@@ -1,0 +1,108 @@
+import pytest
+
+from app.errors import (
+    ChecksumAlreadyExistsError,
+    ImmutableFieldError,
+    InternalError,
+    MethodNotAllowedError,
+    PayloadTooLargeError,
+    PersistenceError,
+    ResourceNotFoundError,
+    TextNotFoundError,
+    UnauthorizedError,
+    UnsupportedMediaTypeError,
+    ValidationError,
+)
+
+ERROR_MATRIX = [
+    pytest.param(
+        ChecksumAlreadyExistsError,
+        "CHECKSUM_ALREADY_EXISTS",
+        409,
+        "/problems/checksum_already_exists",
+        "Checksum already exists",
+        id="409-checksum-exists",
+    ),
+    pytest.param(
+        TextNotFoundError,
+        "TEXT_NOT_FOUND",
+        404,
+        "/problems/text_not_found",
+        "Text not found",
+        id="404-text-missing",
+    ),
+    pytest.param(
+        UnauthorizedError,
+        "UNAUTHORIZED",
+        401,
+        "/problems/unauthorized",
+        "Unauthorized",
+        id="401-unauthorized",
+    ),
+    pytest.param(
+        ValidationError,
+        "VALIDATION_ERROR",
+        400,
+        "/problems/validation_error",
+        "Request validation error",
+        id="400-validation",
+    ),
+    pytest.param(
+        ImmutableFieldError,
+        "IMMUTABLE_FIELD",
+        400,
+        "/problems/immutable_field",
+        "Immutable field",
+        id="400-immutable",
+    ),
+    pytest.param(
+        PayloadTooLargeError,
+        "PAYLOAD_TOO_LARGE",
+        413,
+        "/problems/payload_too_large",
+        "Payload too large",
+        id="413-too-large",
+    ),
+    pytest.param(
+        UnsupportedMediaTypeError,
+        "UNSUPPORTED_MEDIA_TYPE",
+        415,
+        "/problems/unsupported_media_type",
+        "Unsupported media type",
+        id="415-media",
+    ),
+    pytest.param(
+        MethodNotAllowedError,
+        "METHOD_NOT_ALLOWED",
+        405,
+        "/problems/method_not_allowed",
+        "Method not allowed",
+        id="405-method",
+    ),
+    pytest.param(
+        ResourceNotFoundError,
+        "NOT_FOUND",
+        404,
+        "/problems/not_found",
+        "Resource not found",
+        id="404-route-missing",
+    ),
+    pytest.param(
+        PersistenceError,
+        "PERSISTENCE_ERROR",
+        503,
+        "/problems/persistence_error",
+        "Persistence unavailable",
+        id="503-persistence",
+    ),
+    pytest.param(
+        InternalError,
+        "INTERNAL_ERROR",
+        500,
+        "/problems/internal_error",
+        "Internal server error",
+        id="500-internal",
+    ),
+]
+
+ALL_ERROR_CLASSES = [param.values[0] for param in ERROR_MATRIX]
