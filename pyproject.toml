@@ -1,0 +1,57 @@
+[project]
+name = "persistence-microservice"
+version = "0.1.0"
+description = "Persistence microservice for pdf-extractext: stores extracted text documents in MongoDB keyed by checksum."
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi>=0.141.1",
+    "pydantic>=2.13.5",
+    "pymongo>=4.13.0",
+    "uvicorn[standard]>=0.52.4",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.16.6",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+# Coverage is always measured so the report is visible on every run, but the
+# threshold is NOT enforced here: it would make every incremental run fail
+# until enough tests exist. The gate is run explicitly:
+#     uv run pytest --cov-fail-under=85
+addopts = "--cov=app"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.coverage.run]
+branch = true
+source = ["app"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+target-version = "py314"
+line-length = 88
+# Python code blocks inside the Markdown design docs are illustrative snippets,
+# not source. Reformatting them would rewrite SPEC.md on every `ruff format`.
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "C4"]
+
+[tool.ruff.lint.per-file-ignores]
+# FastAPI declares a dependency as a call in the parameter default. That is the
+# framework's own idiom, evaluated once at import, not a mutable default.
+"app/api/routers/*.py" = ["B008"]
