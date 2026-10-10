@@ -54,8 +54,8 @@ class MongoConnection:
             tiene que seguir en pie y dejar que /readyz lo informe, así que no
             se lanza nada.
         """
-        timeout = self._settings.mongo_timeout_ms
-        uri = self._settings.mongo_uri
+        timeout = self._settings.mongodb_timeout_ms
+        uri = self._settings.mongodb_uri
         self._client = self._client_factory(
             uri,
             serverSelectionTimeoutMS=timeout,
@@ -93,7 +93,7 @@ class MongoConnection:
         return True
 
     def _database(self) -> Any:
-        return self._client[self._settings.mongo_database]
+        return self._client[self._settings.mongodb_database]
 
     def texts(self) -> Any:
         """Devuelve la colección que contiene los textos.
@@ -101,4 +101,4 @@ class MongoConnection:
         El repositorio se construye sobre ella, así que todo el servicio
         comparte un único cliente y un único pool de conexiones.
         """
-        return self._database()[self._settings.mongo_texts_collection]
+        return self._database()[self._settings.mongodb_texts_collection]

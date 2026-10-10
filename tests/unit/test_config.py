@@ -2,9 +2,12 @@
 
 La configuracion es la ultima linea de defensa antes de que el servicio arranque
 sin proteccion, asi que los tests enuncian dos cosas con rotundo: cada valor por
-defecto documentado de SPEC 2.5 se respeta exactamente, y un
-``SERVICE_API_TOKEN`` ausente, vacio o formado solo por espacios detiene el
-proceso en lugar de dejarlo arrancar.
+defecto documentado de SPEC 2.5 se respeta exactamente, y un token ausente, vacio
+o formado solo por espacios detiene el proceso en lugar de dejarlo arrancar.
+
+El orquestador nombra el secreto compartido ``PERSISTENCE_API_TOKEN``, asi que ese
+es el nombre canonico que este servicio lee; ``SERVICE_API_TOKEN`` se conserva
+como nombre heredado para no romper arranques ya desplegados.
 
 El entorno es real aqui a proposito. ``monkeypatch`` fija y elimina variables de
 proceso reales, asi que estos tests ejercitan las mismas lecturas de ``os.environ``
@@ -17,6 +20,7 @@ from app.config import ConfigurationError, Settings, get_settings
 
 ALL_VARIABLES = (
     "APP_NAME",
+    "PERSISTENCE_API_TOKEN",
     "SERVICE_API_TOKEN",
     "MONGO_URI",
     "MONGO_DATABASE",
@@ -59,6 +63,25 @@ def test_the_six_documented_defaults_apply_when_only_the_token_is_set(token):
 
 def test_the_token_is_read_from_the_environment(token):
     assert get_settings().service_api_token == "s3cr3t-token"
+
+
+def test_the_persistence_api_token_is_read_from_the_environment(clean_environment):
+    clean_environment.setenv("PERSISTENCE_API_TOKEN", "orch-token")
+
+    assert get_settings().service_api_token == "orch-token"
+
+
+def test_the_persistence_api_token_wins_over_the_legacy_name(clean_environment):
+    clean_environment.setenv("PERSISTENCE_API_TOKEN", "orch-token")
+    clean_environment.setenv("SERVICE_API_TOKEN", "legacy-token")
+
+    assert get_settings().service_api_token == "orch-token"
+
+
+def test_the_legacy_service_api_token_is_still_accepted(clean_environment):
+    clean_environment.setenv("SERVICE_API_TOKEN", "legacy-token")
+
+    assert get_settings().service_api_token == "legacy-token"
 
 
 def test_every_documented_default_matches_the_spec_table(token):
@@ -108,7 +131,7 @@ def test_a_whitespace_only_token_stops_the_service(clean_environment):
 
 
 def test_the_failure_names_the_variable_that_is_missing(clean_environment):
-    with pytest.raises(ConfigurationError, match="SERVICE_API_TOKEN"):
+    with pytest.raises(ConfigurationError, match="PERSISTENCE_API_TOKEN"):
         get_settings()
 
 
@@ -121,13 +144,13 @@ def test_the_failure_echoes_neither_the_variable_value_nor_its_whitespace(
     de verdad: un mensaje construido con ``{raw!r}`` apareceria aqui como un tab y
     una racha de espacios.
     """
-    clean_environment.setenv("SERVICE_API_TOKEN", "  \t  ")
+    clean_environment.setenv("PERSISTENCE_API_TOKEN", "  \t  ")
 
     with pytest.raises(ConfigurationError) as raised:
         get_settings()
 
     message = str(raised.value)
-    assert "SERVICE_API_TOKEN" in message
+    assert "PERSISTENCE_API_TOKEN" in message
     assert "\t" not in message
     assert "  " not in message
 

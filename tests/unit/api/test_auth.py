@@ -258,7 +258,8 @@ async def test_an_open_route_stays_open_even_with_a_wrong_token():
 
 
 async def test_the_app_refuses_to_build_without_a_token_in_the_environment(monkeypatch):
+    monkeypatch.delenv("PERSISTENCE_API_TOKEN", raising=False)
     monkeypatch.delenv("SERVICE_API_TOKEN", raising=False)
 
-    with pytest.raises(ConfigurationError, match="SERVICE_API_TOKEN"):
+    with pytest.raises(ConfigurationError, match="PERSISTENCE_API_TOKEN"):
         create_app()

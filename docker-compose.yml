@@ -1,0 +1,102 @@
+# Persistence microservice behind Traefik — local HTTP stack.
+#
+#   traefik  ──►  persistence  ──►  mongo
+#   (proxy)       (:8000)           (internal only)
+#
+# Start:
+#     docker compose up --build -d
+#
+# The service is also published on the host at the port the orchestrator
+# expects (`PERSISTENCE_BASE_URL = http://localhost:8082`):
+#     curl http://localhost:8082/health
+#     curl -H "Authorization: Bearer $env:PERSISTENCE_API_TOKEN" \
+#          "http://localhost:8082/texts?checksum=abc"
+#
+# Traefik still routes the service too (no port, no TLS — *.localhost resolves
+# to 127.0.0.1 on the host):
+#     curl http://persistence.localhost/health
+#
+# PERSISTENCE_API_TOKEN is the canonical name of the shared secret (the
+# orchestrator uses it too); SERVICE_API_TOKEN is still accepted as a legacy
+# alias. It comes from the `.env` file next to this compose file (see
+# .env.example). Compose fails fast if neither is set.
+#
+# The Traefik dashboard is intentionally disabled. The Docker provider is
+# read-only and opt-in (`exposedbydefault=false`): only services that carry
+# `traefik.enable=true` are routed.
+
+services:
+  traefik:
+    image: traefik:v3.6
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      # Reach containers over the shared `proxy` network, not the internal one.
+      - --providers.docker.network=proxy
+      - --entrypoints.web.address=:80
+      - --accesslog=true
+    ports:
+      - "80:80"
+    volumes:
+      # Read-only: Traefik only watches container labels, never writes.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - proxy
+    restart: unless-stopped
+
+  persistence:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      # Published directly for the orchestrator: PERSISTENCE_BASE_URL points at
+      # http://localhost:8082. Traefik still routes the service as well.
+      - "8082:8000"
+    environment:
+      # Canonical secret name; the legacy alias still works as a fallback.
+      PERSISTENCE_API_TOKEN: ${PERSISTENCE_API_TOKEN:-${SERVICE_API_TOKEN:?PERSISTENCE_API_TOKEN is required; copy .env.example to .env and set it}}
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DATABASE: ${MONGO_DATABASE:-pdf_extractext}
+      MONGO_TEXTS_COLLECTION: ${MONGO_TEXTS_COLLECTION:-texts}
+      MONGO_TIMEOUT_MS: ${MONGO_TIMEOUT_MS:-5000}
+      MAX_TEXT_BODY_BYTES: ${MAX_TEXT_BODY_BYTES:-10485760}
+      APP_NAME: ${APP_NAME:-Persistence Microservice}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.persistence.rule=Host(`persistence.localhost`)
+      - traefik.http.routers.persistence.entrypoints=web
+      - traefik.http.services.persistence.loadbalancer.server.port=8000
+    networks:
+      - proxy
+      - internal
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:7.0
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      # Internal only: the database is never reachable from the host.
+      - internal
+    restart: unless-stopped
+
+volumes:
+  mongo-data:
+
+networks:
+  # Explicit names (not prefixed by the compose project) so that Traefik's
+  # --providers.docker.network=proxy resolves to this exact network.
+  proxy:
+    name: proxy
+  internal:
+    name: internal
+    internal: true
