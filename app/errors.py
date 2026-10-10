@@ -1,35 +1,3 @@
-"""Vocabulario de errores de dominio compartido por las tres capas.
-
-Contrato entre capas
---------------------
-La Capa 3 (repositorios) lanza estos errores cuando falla el driver, la Capa 2
-(servicios) decide qué fallo significa un caso de uso, y la Capa 1 (api)
-traduce uno a un documento de problema RFC 9457. Nada de aquí importa FastAPI,
-Starlette ni pymongo, así que el vocabulario sigue siendo utilizable desde
-cualquier capa y trivial de testear.
-
-Por qué estas clases llevan un ``status`` HTTP
-----------------------------------------------
-Un status HTTP sobre un error de dominio parece una fuga entre capas, y se lleva
-a propósito. De lo contrario la Capa 1 necesitaría su propia tabla
-``{clase de error -> status}``: la misma información en un segundo sitio, libre
-de derivar. Una definición, leída por la capa que la necesita.
-
-Atributos de clase frente a atributos de instancia
----------------------------------------------------
-``status``, ``code``, ``type_uri``, ``title`` y ``default_detail`` son
-``ClassVar``: describen una *clase* de fallo y la comparten todas las
-ocurrencias. ``detail`` es por instancia porque describe una ocurrencia, y es el
-único sitio donde puede aparecer un dato variable como un checksum.
-
-Los valores de abajo reflejan la sección 6.2 del SPEC fila por fila.
-``tests/unit/test_errors.py`` afirma la misma tabla, así que un cambio en
-cualquiera de las dos falla ruidosamente.
-
-Los valores de ``title`` y ``default_detail`` son contrato de cable: los lee el
-cliente Go, así que no se traducen aunque esta documentación esté en español.
-"""
-
 from typing import ClassVar
 
 

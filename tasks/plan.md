@@ -732,3 +732,9 @@ Antes de conectar este servicio, el cliente Go necesita:
 3. `PERSISTENCE_API_TOKEN` en la configuración.
 4. `Authorization: Bearer <token>` en todas las requests (`httpclient/client.go`).
 5. Manejo de `401` como **error de configuración con fail-fast**, sin reintento.
+
+> **Estado (9-oct-2026):** los cinco ajustes más la reescritura de
+> `persistence/client_test.go` están **hechos y verificados** en el orquestador Go
+> (`go build ./... && go vet ./... && go test ./...` en verde). `PERSISTENCE_API_TOKEN`
+> quedó como variable obligatoria (sin default) y debe coincidir con el
+> `SERVICE_API_TOKEN` de este servicio.

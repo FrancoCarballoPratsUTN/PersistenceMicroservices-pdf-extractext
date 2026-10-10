@@ -1,11 +1,3 @@
-"""Las correcciones aplicadas al documento que FastAPI no puede escribir (T17).
-
-``tests/integration/api/test_openapi.py`` comprueba el documento que el servicio
-publica de verdad. Estos tests cubren las dos correcciones cuyo unico caso
-interesante es un documento que el servicio no tiene: un parametro que no es el
-checksum, y una ruta que no declara parametro alguno.
-"""
-
 from typing import Any
 
 import pytest
