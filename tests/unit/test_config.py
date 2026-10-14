@@ -27,6 +27,7 @@ ALL_VARIABLES = (
     "MONGO_TEXTS_COLLECTION",
     "MONGO_TIMEOUT_MS",
     "MAX_TEXT_BODY_BYTES",
+    "LOG_LEVEL",
 )
 
 
@@ -50,7 +51,7 @@ def token(clean_environment):
     return "s3cr3t-token"
 
 
-def test_the_six_documented_defaults_apply_when_only_the_token_is_set(token):
+def test_the_documented_defaults_apply_when_only_the_token_is_set(token):
     settings = get_settings()
 
     assert settings.app_name == "Persistence Microservice"
@@ -59,6 +60,7 @@ def test_the_six_documented_defaults_apply_when_only_the_token_is_set(token):
     assert settings.mongo_texts_collection == "texts"
     assert settings.mongo_timeout_ms == 5000
     assert settings.max_text_body_bytes == 10485760
+    assert settings.log_level == "INFO"
 
 
 def test_the_token_is_read_from_the_environment(token):
@@ -99,6 +101,7 @@ def test_every_documented_default_matches_the_spec_table(token):
         "MONGO_TEXTS_COLLECTION": settings.mongo_texts_collection,
         "MONGO_TIMEOUT_MS": settings.mongo_timeout_ms,
         "MAX_TEXT_BODY_BYTES": settings.max_text_body_bytes,
+        "LOG_LEVEL": settings.log_level,
     }
 
     assert documented == {
@@ -108,6 +111,7 @@ def test_every_documented_default_matches_the_spec_table(token):
         "MONGO_TEXTS_COLLECTION": "texts",
         "MONGO_TIMEOUT_MS": 5000,
         "MAX_TEXT_BODY_BYTES": 10485760,
+        "LOG_LEVEL": "INFO",
     }
 
 
@@ -237,7 +241,7 @@ def test_a_settings_instance_can_be_built_without_reading_the_environment(token)
     assert Settings(service_api_token="direct").service_api_token == "direct"
 
 
-def test_settings_expose_exactly_the_seven_documented_variables(token):
+def test_settings_expose_exactly_the_documented_variables(token):
     assert set(Settings.__dataclass_fields__) == {
         "app_name",
         "service_api_token",
@@ -246,4 +250,33 @@ def test_settings_expose_exactly_the_seven_documented_variables(token):
         "mongo_texts_collection",
         "mongo_timeout_ms",
         "max_text_body_bytes",
+        "log_level",
     }
+
+
+def test_the_log_level_defaults_to_info(token):
+    assert get_settings().log_level == "INFO"
+
+
+def test_the_log_level_is_read_from_the_environment(clean_environment):
+    clean_environment.setenv("SERVICE_API_TOKEN", "s3cr3t-token")
+    clean_environment.setenv("LOG_LEVEL", "debug")
+
+    assert get_settings().log_level == "DEBUG"
+
+
+def test_a_blank_log_level_falls_back_to_its_default(clean_environment):
+    clean_environment.setenv("SERVICE_API_TOKEN", "s3cr3t-token")
+    clean_environment.setenv("LOG_LEVEL", "   ")
+
+    assert get_settings().log_level == "INFO"
+
+
+def test_an_unknown_log_level_is_reported_as_a_configuration_error(
+    clean_environment,
+):
+    clean_environment.setenv("SERVICE_API_TOKEN", "s3cr3t-token")
+    clean_environment.setenv("LOG_LEVEL", "verbose")
+
+    with pytest.raises(ConfigurationError, match="LOG_LEVEL"):
+        get_settings()

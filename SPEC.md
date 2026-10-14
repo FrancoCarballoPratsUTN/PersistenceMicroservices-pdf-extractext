@@ -418,6 +418,7 @@ PersistenceMicroservices-pdf-extractext/
 | `MONGO_TEXTS_COLLECTION` | `str` | `texts` | colección |
 | `MONGO_TIMEOUT_MS` | `int` | `5000` | timeout de operaciones Mongo |
 | `MAX_TEXT_BODY_BYTES` | `int` | `10485760` (10 MiB) | límite del body (riesgo B) |
+| `LOG_LEVEL` | `str` | `INFO` | nivel mínimo del logging del servicio |
 
 `SERVICE_API_TOKEN` **no tiene default**: si falta o está vacía, la app **no
 arranca** y falla al inicializar con un error explícito. Se prefiere fallar

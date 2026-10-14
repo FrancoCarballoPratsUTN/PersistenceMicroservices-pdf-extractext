@@ -141,10 +141,6 @@ class PersistenceError(ServiceError):
     default_detail = "The persistence layer is unavailable."
 
 
-# Los lanza la capa de persistencia/repositorio y se traducen a las excepciones
-# de dominio de servicio/API de arriba. Existen aquí para mantener el repositorio
-# libre de conocimiento sobre códigos de estado HTTP cuando eso resulta cómodo en
-# los tests.
 class DuplicateKeyError(Exception):
     """Error de clave duplicada de MongoDB (pymongo.errors.DuplicateKeyError)."""
 

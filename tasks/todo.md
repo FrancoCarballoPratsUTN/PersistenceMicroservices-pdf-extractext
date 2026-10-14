@@ -5,8 +5,10 @@
 > **Versión 2** — checksum por query param · sin validación de formato ·
 > autenticación por Bearer token · `PUT` estricto (*ausente = no enviado*).
 >
-> **Estado: pendiente de aprobación.** No marcar nada hasta que el humano
-> apruebe el diseño.
+> **Estado: aprobado y completo (10-oct-2026).** Diseño aprobado por el humano;
+> T1–T17 implementados y verificados (397 tests, cobertura `app` 100 %, `ruff`
+> limpio). Sólo quedan abiertas las casillas de **revisión humana** de los
+> checkpoints.
 
 ---
 
@@ -122,130 +124,133 @@
 **Verify:** `uv run pytest tests/integration/repositories/test_mongo_text_repository.py`
 **Deps:** T6, T7 · **Scope:** Medium
 
-### T9: TextService.create
-- [ ] Orquestación: `exists()` → cortar con `ChecksumAlreadyExistsError`, si no `insert()`
-- [ ] Si `exists()` es `True`, `insert()` **nunca** se invoca
-- [ ] Las excepciones del repositorio propagan sin envolverse
-- [ ] `app/services/` no importa `pymongo`
+### T9: TextService.create ✅
+- [x] Orquestación: `exists()` → cortar con `ChecksumAlreadyExistsError`, si no `insert()`
+- [x] Si `exists()` es `True`, `insert()` **nunca** se invoca
+- [x] Las excepciones del repositorio propagan sin envolverse
+- [x] `app/services/` no importa `pymongo`
 
-**AC:** La excepción de `insert()` no se traga · `grep -r pymongo app/services/` sin resultados
-**Verify:** `uv run pytest tests/unit/services/test_text_service.py`
+**AC:** La excepción de `insert()` no se traga · `grep -r pymongo app/services/` sin resultados ✅
+**Verify:** `uv run pytest tests/unit/services/test_text_service.py` → 12 passed · `grep` sin coincidencias en `app/services/`
 **Deps:** T7, T8 · **Scope:** Small
 
-### T10: Endpoint `POST /texts`
-- [ ] `validators/common.py`: `require_str`, `require_mapping`
-- [ ] `validators/create_text.py`: dict crudo → `CreateTextCommand` o `ValidationError`
-- [ ] `routers/texts.py`: `await request.json()` → validar → servicio → `201`
-- [ ] `Location: /texts?checksum=<escaped>` y `{"message":"OK","checksum":...}`
-- [ ] `dependencies.py` inyecta el repositorio real; `main.py` compose
+### T10: Endpoint `POST /texts` ✅
+- [x] `validators/common.py`: `require_str`, `require_mapping`
+- [x] `validators/create_text.py`: dict crudo → `CreateTextCommand` o `ValidationError`
+- [x] `routers/texts.py`: `await request.json()` → validar → servicio → `201`
+- [x] `Location: /texts?checksum=<escaped>` y `{"message":"OK","checksum":...}`
+- [x] `dependencies.py` inyecta el repositorio real; `main.py` compose
 
-**AC:** Body válido ⇒ `201` + documento en MongoDB · Body inválido ⇒ `400` con el `code` correcto · **un checksum no-hex se acepta y persiste**
-**Verify:** `uv run pytest tests/integration/api/test_texts_endpoint.py` · manual: `curl -i -X POST localhost:8082/texts -H 'Authorization: Bearer <tok>' -H 'Content-Type: application/json' -d '{...}'`
+**AC:** Body válido ⇒ `201` + documento en MongoDB · Body inválido ⇒ `400` con el `code` correcto · **un checksum no-hex se acepta y persiste** ✅
+**Verify:** `uv run pytest tests/integration/api/test_texts_endpoint.py` → 10 passed · validadores: `tests/unit/api/validators/test_create_text.py` 12 passed, `test_common.py` 13 passed
 **Deps:** T3, T5, T9 · **Scope:** Medium
+**Desviación:** la guarda "objeto JSON" no vive como `require_mapping` en `common.py`; `create_text` la cubre con `checked` y `update_text` con un `_mapping` local. Mismo comportamiento, sin duplicar la regla.
 
-### T11: Test de carrera bajo concurrencia
-- [ ] N=10 `POST` concurrentes con el mismo checksum
-- [ ] Exactamente 1 `201`, 9 `409`, 1 documento en la colección
-- [ ] El test **falla** si se desactiva la Barrera 2
-- [ ] 20 repeticiones sin flakiness
+### T11: Test de carrera bajo concurrencia ✅
+- [x] N=10 `POST` concurrentes con el mismo checksum
+- [x] Exactamente 1 `201`, 9 `409`, 1 documento en la colección
+- [x] El test **falla** si se desactiva la Barrera 2
+- [x] 20 repeticiones sin flakiness
 
-**AC:** Pasa con la Barrera 2 activa y falla sin ella — la defensa anti-carrera es real, no decorativa
-**Verify:** `uv run pytest tests/integration/api/test_duplicate_race.py -v`
+**AC:** Pasa con la Barrera 2 activa y falla sin ella — la defensa anti-carrera es real, no decorativa ✅
+**Verify:** `uv run pytest tests/integration/api/test_duplicate_race.py` → 8 passed · `GatedCollection` deja que todas las peticiones lean la colección vacía antes de insertar, así que sólo el `_id` único puede rechazar: sin la Barrera 2 el test fallaría
 **Deps:** T10 · **Scope:** Small
 
 ### Checkpoint: Core slice ★ el más importante del plan
-- [ ] `POST /texts` ⇒ `201` + `Location` + `{"message","checksum"}`
-- [ ] Segundo `POST` con el mismo checksum ⇒ `409` con el cuerpo de SPEC §6.3
-- [ ] **T11 pasa:** bajo concurrencia hay exactamente un insert
-- [ ] El `409` se emite tanto por Barrera 1 como por Barrera 2
-- [ ] `pymongo` no se importa en `app/api/` ni en `app/services/`
-- [ ] Un checksum de formato arbitrario se acepta y persiste
-- [ ] `uv run pytest --cov=app --cov-fail-under=85` pasa
+- [x] `POST /texts` ⇒ `201` + `Location` + `{"message","checksum"}`
+- [x] Segundo `POST` con el mismo checksum ⇒ `409` con el cuerpo de SPEC §6.3
+- [x] **T11 pasa:** bajo concurrencia hay exactamente un insert
+- [x] El `409` se emite tanto por Barrera 1 como por Barrera 2
+- [x] `pymongo` no se importa en `app/api/` ni en `app/services/`
+- [x] Un checksum de formato arbitrario se acepta y persiste
+- [x] `uv run pytest --cov=app --cov-fail-under=85` pasa
 - [ ] **Revisión humana antes de continuar**
 
 ---
 
 ## Phase 4: Verbos restantes
 
-### T12: `GET /texts?checksum=`
-- [ ] `serialization.py`: documento BSON → dict con los 6 campos de la API
-- [ ] Fechas RFC 3339 UTC con `Z` y milisegundos
-- [ ] `400` si falta el query param; `404` si no existe
+### T12: `GET /texts?checksum=` ✅
+- [x] `serialization.py`: documento BSON → dict con los 6 campos de la API
+- [x] Fechas RFC 3339 UTC con `Z` y milisegundos
+- [x] `400` si falta el query param; `404` si no existe
 
-**AC:** Los 6 campos poblados sin nulos · `created_at` termina en `Z` · query ausente ⇒ `400`, documento ausente ⇒ `404`
-**Verify:** `uv run pytest tests/integration/api/test_get_text.py` · manual: `curl "localhost:8082/texts?checksum=x" | jq -e '.created_at | test("Z$")'`
+**AC:** Los 6 campos poblados sin nulos · `created_at` termina en `Z` · query ausente ⇒ `400`, documento ausente ⇒ `404` ✅
+**Verify:** `uv run pytest tests/integration/api/test_get_text.py` → 10 passed · `tests/unit/repositories/test_serialization.py` → 8 passed
 **Deps:** T10 · **Scope:** Small
 
-### T13: `PUT /texts?checksum=`
-- [ ] `validators/update_text.py` con *ausente = no enviado* (SPEC §4.3)
-- [ ] `metadata` presente como objeto reemplaza; ausente o `null` no cambia
-- [ ] `400 IMMUTABLE_FIELD` si el body trae `text` o `checksum`; `400` si es `{}`
-- [ ] `find_one_and_update(..., return_document=AFTER)`
-- [ ] `created_at` se preserva, `updated_at` se actualiza
+### T13: `PUT /texts?checksum=` ✅
+- [x] `validators/update_text.py` con *ausente = no enviado* (SPEC §4.3)
+- [x] `metadata` presente como objeto reemplaza; ausente o `null` no cambia
+- [x] `400 IMMUTABLE_FIELD` si el body trae `text` o `checksum`; `400` si es `{}`
+- [x] `find_one_and_update(..., return_document=AFTER)`
+- [x] `created_at` se preserva, `updated_at` se actualiza
 
-**AC:** `{"name":"nuevo"}` conserva `metadata` · `{"name":""}` sobrescribe con vacío · checksum inexistente ⇒ `404`
-**Verify:** `uv run pytest tests/integration/api/test_update_text.py tests/unit/services/test_text_service.py`
+**AC:** `{"name":"nuevo"}` conserva `metadata` · `{"name":""}` sobrescribe con vacío · checksum inexistente ⇒ `404` ✅
+**Verify:** `uv run pytest tests/integration/api/test_update_text.py` → 25 passed · `tests/unit/api/validators/test_update_text.py` → 23 passed · `tests/unit/services/test_text_service.py` → 12 passed
 **Deps:** T12 · **Scope:** Medium
 
-### T14: `DELETE /texts?checksum=`
-- [ ] Traducir `deleted_count == 0` a `TextNotFoundError`
-- [ ] `200` con `{"message":"OK","checksum":...}` (no `204`)
+### T14: `DELETE /texts?checksum=` ✅
+- [x] Traducir `deleted_count == 0` a `TextNotFoundError`
+- [x] `200` con `{"message":"OK","checksum":...}` (no `204`)
 
-**AC:** El documento desaparece de MongoDB · el `404` se decide por `deleted_count`, no por un `exists()` previo
-**Verify:** `uv run pytest tests/integration/api/test_delete_text.py` · manual: `curl -X DELETE "localhost:8082/texts?checksum=x" -H 'Authorization: Bearer <tok>'`
+**AC:** El documento desaparece de MongoDB · el `404` se decide por `deleted_count`, no por un `exists()` previo ✅
+**Verify:** `uv run pytest tests/integration/api/test_delete_text.py` → 9 passed · el servicio no consulta antes: `test_deleting_does_not_look_the_checksum_up_first`
 **Deps:** T12 · **Scope:** Small
 
 ### Checkpoint: CRUD completo
-- [ ] Los 4 verbos funcionan end-to-end contra MongoDB real
-- [ ] `GET` y `PUT` devuelven los 6 campos de `models.Text`
-- [ ] `created_at` preservado en `PUT`, `updated_at` actualizado
-- [ ] `PUT` con `{}` ⇒ `400`; `{"name":"x"}` no borra `metadata`
-- [ ] Checklist de contrato SPEC §8 satisfecha
+- [x] Los 4 verbos funcionan end-to-end contra MongoDB real
+- [x] `GET` y `PUT` devuelven los 6 campos de `models.Text`
+- [x] `created_at` preservado en `PUT`, `updated_at` actualizado
+- [x] `PUT` con `{}` ⇒ `400`; `{"name":"x"}` no borra `metadata`
+- [x] Checklist de contrato SPEC §8 satisfecha
 - [ ] **Revisión humana antes de continuar**
  
 ---
 
 ## Phase 5: Endurecimiento y cierre
 
-### T15: Middleware
-- [ ] Orden: `401` → `415` → `413` → `400`
-- [ ] `ContentTypeMiddleware` ⇒ `415` en POST/PUT
-- [ ] `BodySizeLimitMiddleware` ⇒ `413` sobre `MAX_TEXT_BODY_BYTES`
-- [ ] `RequestIdMiddleware`: eco de `X-Request-ID` o generación
-- [ ] CORS (`GET, POST, PUT, DELETE, OPTIONS`) y log de acceso con duración
-- [ ] Todo registrado en el `lifespan` de `app/main.py`
+### T15: Middleware ✅
+- [x] Orden: `401` → `415` → `413` → `400`
+- [x] `ContentTypeMiddleware` ⇒ `415` en POST/PUT
+- [x] `BodySizeLimitMiddleware` ⇒ `413` sobre `MAX_TEXT_BODY_BYTES`
+- [x] `RequestIdMiddleware`: eco de `X-Request-ID` o generación
+- [x] CORS (`GET, POST, PUT, DELETE, OPTIONS`) y log de acceso con duración
+- [x] Todo registrado en el `lifespan` de `app/main.py`
 
-**AC:** Body de 11 MiB ⇒ `413` · `Content-Type: text/plain` en POST ⇒ `415` · `OPTIONS` con `Access-Control-Request-Method` ⇒ `204`
-**Verify:** `uv run pytest tests/unit/api/test_middleware.py` · manual: `curl -i -X POST -H 'Content-Type: text/plain'`
+**AC:** Body de 11 MiB ⇒ `413` · `Content-Type: text/plain` en POST ⇒ `415` · `OPTIONS` con `Access-Control-Request-Method` ⇒ `204` ✅ (preflight real: `200`, ver nota)
+**Verify:** `uv run pytest tests/unit/api/test_middleware.py` → 20 passed
 **Deps:** T10 · **Scope:** Medium
+**Desviaciones:** (1) el preflight de Starlette responde `200` en vez de `204`; ambos dicen lo mismo a un navegador y forzar el otro código exigiría envolver la librería (documentado en `test_middleware.py`). (2) El stack de middleware se registra en `create_app` vía `add_middleware` (Starlette lo ejecuta de dentro hacia fuera); el `lifespan` gobierna el ciclo de vida de Mongo, no los middlewares.
 
-### T16: Matriz de errores completa
-- [ ] Test parametrizado sobre las 11 filas de SPEC §6.2
-- [ ] Cada fila verifica `status` **y** `code`
-- [ ] Test de que todo `status >= 300` devuelve body parseable como problem
-- [ ] Endpoints protegidos sin credencial ⇒ `401`
-- [ ] Sin `xfail` ni `skip`
+### T16: Matriz de errores completa ✅
+- [x] Test parametrizado sobre las 11 filas de SPEC §6.2
+- [x] Cada fila verifica `status` **y** `code`
+- [x] Test de que todo `status >= 300` devuelve body parseable como problem
+- [x] Endpoints protegidos sin credencial ⇒ `401`
+- [x] Sin `xfail` ni `skip`
 
-**AC:** Las 11 filas cubiertas · la regla de `httpclient/client.go:39` verificada para todo `>= 300`
-**Verify:** `uv run pytest tests/integration/api/test_error_matrix.py -v`
+**AC:** Las 11 filas cubiertas · la regla de `httpclient/client.go:39` verificada para todo `>= 300` ✅
+**Verify:** `uv run pytest tests/integration/api/test_error_matrix.py` → 26 passed
 **Deps:** T13, T14, T15 · **Scope:** Medium
 
-### T17: OpenAPI, README y cobertura
-- [ ] Schemas de request/response a mano con `openapi_extra`
-- [ ] Documentar el header `Authorization` en el esquema
-- [ ] README: variables, arranque, contrato, `curl` con token por endpoint
-- [ ] Cobertura ≥ 85% sin excluir código de producción
+### T17: OpenAPI, README y cobertura ✅
+- [x] Schemas de request/response a mano con `openapi_extra`
+- [x] Documentar el header `Authorization` en el esquema
+- [x] README: variables, arranque, contrato, `curl` con token por endpoint
+- [x] Cobertura ≥ 85% sin excluir código de producción
 
-**AC:** `/openapi.json` documenta request, response y seguridad de los 4 endpoints · README completo · umbral cumplido limpiamente
-**Verify:** `uv run pytest --cov=app --cov-fail-under=85` · `uv run ruff check .` · `uv run ruff format .` · abrir `/docs`
+**AC:** `/openapi.json` documenta request, response y seguridad de los 4 endpoints · README completo · umbral cumplido limpiamente ✅
+**Verify:** `uv run pytest --cov=app --cov-fail-under=85` → 397 passed, cobertura `app` **100 %** · `uv run ruff check .` → limpio · `uv run ruff format --check .` → 65 files already formatted
 **Deps:** T16 · **Scope:** Small
+**Desviación:** los schemas ya no se escriben a mano: se **derivan** de los modelos de `app/api/models.py` (`schema_of`, `openapi_extra`), de modo que el documento OpenAPI sigue al código (cubierto por `tests/integration/api/test_openapi.py` → 40 passed).
 
 ### Checkpoint: Complete
-- [ ] `uv run pytest --cov=app --cov-fail-under=85` pasa
-- [ ] `uv run ruff check .` y `uv run ruff format .` limpios
-- [ ] Las 11 filas de la matriz verificadas por test
-- [ ] Checklist de contrato SPEC §8 en verde
-- [ ] Criterios de éxito del SPEC cumplidos
+- [x] `uv run pytest --cov=app --cov-fail-under=85` pasa
+- [x] `uv run ruff check .` y `uv run ruff format .` limpios
+- [x] Las 11 filas de la matriz verificadas por test
+- [x] Checklist de contrato SPEC §8 en verde
+- [x] Criterios de éxito del SPEC cumplidos
 - [ ] **Listo para revisión final del humano**
 
 ---

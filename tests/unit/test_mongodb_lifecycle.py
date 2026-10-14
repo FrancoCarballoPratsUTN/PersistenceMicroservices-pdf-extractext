@@ -208,6 +208,18 @@ async def test_an_unexpected_error_while_closing_does_not_break_the_shutdown(
     assert any(record.levelno >= logging.ERROR for record in caplog.records)
 
 
+async def test_the_start_is_logged(caplog: pytest.LogCaptureFixture) -> None:
+    """El arranque enmarca el ciclo de vida en el log, con su duración, para poder
+    leer el timeline de una instancia junto a la línea de apagado."""
+    with caplog.at_level(logging.INFO, logger="app.main"):
+        async with build_running_app(FakeMongoClientFactory()) as (_, _):
+            pass
+
+    messages = [record.getMessage().lower() for record in caplog.records]
+    assert any("starting the service" in message for message in messages)
+    assert any("service started in" in message for message in messages)
+
+
 async def test_the_shutdown_is_logged(caplog: pytest.LogCaptureFixture) -> None:
     """Quien opera tiene que poder ver en el log que el servicio cerró y cuánto
     tardó, no sólo que dejó de responder (SPEC 5.5)."""

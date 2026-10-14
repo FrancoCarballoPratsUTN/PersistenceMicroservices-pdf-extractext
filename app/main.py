@@ -32,6 +32,7 @@ from app.api.middleware import (
 from app.api.routers import health, texts
 from app.api.schemas import publish
 from app.config import Settings, get_settings
+from app.logging_setup import configure_logging
 from app.repositories.mongodb import MongoConnection
 from app.repositories.mongodb_text_repository import MongoTextRepository
 from app.services.text_service import TextService
@@ -48,15 +49,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     necesita para sacar la instancia de rotación sin un bucle de reinicio
     (SPEC 5.5).
 
+    Arranque y apagado se registran con su duración, así que el timeline de una
+    instancia se lee de un vistazo. El estado de MongoDB no se repite aquí: ``start()``
+    ya lo avisa por su cuenta.
+
     El apagado tampoco puede fallar. Uvicorn ya terminó las peticiones en vuelo
     antes de llegar aquí: lo que queda es soltar el pool, y un error al hacerlo
     se registra en vez de convertir una parada limpia en una salida con error.
     """
     connection: MongoConnection = app.state.mongo
+    logger.info("Starting the service.")
+    startup_started = perf_counter()
     await connection.start()
     # La colección sólo existe una vez construido el cliente, así que el servicio
     # se cablea aquí: una conexión, un repositorio, un pool (SPEC 2.1).
     app.state.text_service = TextService(MongoTextRepository(connection.texts()))
+    logger.info(
+        "Service started in %.1f ms.", (perf_counter() - startup_started) * 1000
+    )
     try:
         yield
     finally:
@@ -94,6 +104,7 @@ def create_app(
         endpoints.
     """
     resolved = settings if settings is not None else get_settings()
+    configure_logging(resolved.log_level)
     mongo = connection if connection is not None else MongoConnection(resolved)
 
     app = FastAPI(title=resolved.app_name, lifespan=lifespan)

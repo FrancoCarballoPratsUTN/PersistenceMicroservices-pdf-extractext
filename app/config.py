@@ -1,3 +1,4 @@
+import logging
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -31,6 +32,27 @@ def _positive_integer(
     return number
 
 
+def _log_level(value: str | None, default: str = "INFO") -> str:
+    """Convierte una variable en un nivel de logging válido de la stdlib.
+
+    Se acepta el nombre estándar en cualquier capitalización (``info``, ``INFO``).
+    Un nombre desconocido detiene el arranque: un nivel mal escrito subiría o
+    bajaría el detalle del log en silencio, que es justo lo que no se quiere
+    depurar un incidente.
+    """
+    if value is None or not str(value).strip():
+        return default
+
+    name = str(value).strip().upper()
+    if name not in logging.getLevelNamesMapping():
+        raise ConfigurationError(
+            "LOG_LEVEL must be a standard logging level name such as DEBUG, "
+            f"INFO, WARNING or ERROR, not {name!r}."
+        )
+
+    return name
+
+
 @dataclass(frozen=True)
 class Settings:
     service_api_token: str
@@ -40,6 +62,7 @@ class Settings:
     mongo_texts_collection: str = "texts"
     mongo_timeout_ms: int = 5000
     max_text_body_bytes: int = 10485760
+    log_level: str = "INFO"
 
     @property
     def mongodb_uri(self) -> str:
@@ -84,6 +107,8 @@ def get_settings(environ: Mapping[str, str] = os.environ) -> Settings:
         os.getenv("MAX_TEXT_BODY_BYTES"),
     )
 
+    log_level_value = environ.get("LOG_LEVEL", os.getenv("LOG_LEVEL"))
+
     return Settings(
         service_api_token=str(token).strip(),
         app_name=environ.get(
@@ -121,4 +146,5 @@ def get_settings(environ: Mapping[str, str] = os.environ) -> Settings:
             "MAX_TEXT_BODY_BYTES",
             10485760,
         ),
+        log_level=_log_level(log_level_value),
     )

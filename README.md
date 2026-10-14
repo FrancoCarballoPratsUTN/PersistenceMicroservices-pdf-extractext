@@ -13,7 +13,7 @@ cómo arrancarlo y cómo falar con él.
 
 ## Variables de entorno
 
-Siete variables, seis con valor por defecto. `SERVICE_API_TOKEN` **no** tiene
+Ocho variables, siete con valor por defecto. `SERVICE_API_TOKEN` **no** tiene
 valor por defecto: sin ella el proceso no arranca (SPEC 2.5).
 
 | Variable | Por defecto | Qué es |
@@ -25,6 +25,7 @@ valor por defecto: sin ella el proceso no arranca (SPEC 2.5).
 | `MONGO_TEXTS_COLLECTION` | `texts` | Colección que guarda los documentos. |
 | `MONGO_TIMEOUT_MS` | `5000` | Timeout de cada operación contra Mongo. |
 | `MAX_TEXT_BODY_BYTES` | `10485760` | Tamaño máximo del body (10 MiB). |
+| `LOG_LEVEL` | `INFO` | Nivel mínimo del logging (`DEBUG`, `INFO`, `WARNING`, ...). |
 
 Un valor numérico que no sea un entero positivo detiene el arranque: un timeout o
 un límite de tamaño en cero desactivaría el límite en silencio.
@@ -34,11 +35,21 @@ un límite de tamaño en cero desactivaría el límite en silencio.
 ```bash
 uv sync
 uv run uvicorn app.main:create_app --factory --port 8000 \
-    --timeout-graceful-shutdown 20
+    --timeout-graceful-shutdown 20 --no-access-log
 ```
 
 La aplicación se construye con una fábrica (`--factory`) porque la configuración
 se resuelve al construirla, no al importar el módulo.
+
+El logging del servicio se configura al construir la app: `LOG_LEVEL` fija el
+nivel mínimo y las líneas de la aplicación (acceso, ciclo de vida) salen por
+`stderr` con formato `fecha nivel logger mensaje`. Se pasa `--no-access-log` para
+no duplicar cada petición: el log de acceso lo emite `AccessLogMiddleware`, que
+además incluye el `X-Request-ID` y la duración (si ya hay un handler en el logger
+raíz, como en los tests, la configuración no se pisa). El arranque y el apagado
+también se registran con su duración (`Service started in ... ms.` y
+`Shutdown finished in ... ms.`), de modo que el ciclo de vida de una instancia se
+lee de un vistazo.
 
 `--timeout-graceful-shutdown 20` acota el apagado: ante un `SIGTERM`, Uvicorn
 deja de aceptar peticiones, termina las que están en vuelo, ejecuta el `lifespan`
