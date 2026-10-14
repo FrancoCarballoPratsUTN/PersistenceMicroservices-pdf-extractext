@@ -121,6 +121,8 @@ class FakeMongoClient:
             almacenar.
         find_error: Si está definido, toda lectura lanza este error en lugar de
             responder.
+        close_error: Si está definido, cerrar el cliente lanza este error en lugar
+            de marcar el cliente como cerrado.
     """
 
     def __init__(
@@ -132,6 +134,7 @@ class FakeMongoClient:
         index_fails: bool,
         insert_error: Exception | None = None,
         find_error: Exception | None = None,
+        close_error: Exception | None = None,
     ) -> None:
         self.uri = uri
         self.options = options
@@ -139,6 +142,7 @@ class FakeMongoClient:
         self.index_fails = index_fails
         self.insert_error = insert_error
         self.find_error = find_error
+        self.close_error = close_error
         self.pings = 0
         self.indexes: list[tuple[str, str]] = []
         self.documents: dict[Any, dict[str, Any]] = {}
@@ -148,6 +152,9 @@ class FakeMongoClient:
         return FakeDatabase(self, database)
 
     async def close(self) -> None:
+        """Cierra el cliente, salvo que el test haya pedido que falle al hacerlo."""
+        if self.close_error is not None:
+            raise self.close_error
         self.closed = True
 
 
@@ -168,11 +175,13 @@ class FakeMongoClientFactory:
         index_fails: bool = False,
         insert_error: Exception | None = None,
         find_error: Exception | None = None,
+        close_error: Exception | None = None,
     ) -> None:
         self.ping_fails = ping_fails
         self.index_fails = index_fails
         self.insert_error = insert_error
         self.find_error = find_error
+        self.close_error = close_error
         self.clients: list[FakeMongoClient] = []
 
     def __call__(self, uri: str, **options: Any) -> FakeMongoClient:
@@ -183,6 +192,7 @@ class FakeMongoClientFactory:
             index_fails=self.index_fails,
             insert_error=self.insert_error,
             find_error=self.find_error,
+            close_error=self.close_error,
         )
         self.clients.append(client)
         return client

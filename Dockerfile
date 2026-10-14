@@ -50,9 +50,16 @@ USER app
 
 EXPOSE 8000
 
+# Docker's default stop signal is already SIGTERM; stating it documents that the
+# graceful path below depends on it. Uvicorn stops accepting, drains the
+# in-flight requests and only then runs the lifespan shutdown and closes Mongo.
+STOPSIGNAL SIGTERM
+
 # /health is open (no token) and does not query MongoDB, so it is a valid
 # liveness probe: it stays up while the database is down (SPEC 5.5).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
 
-CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+# --timeout-graceful-shutdown bounds the drain so a stuck request cannot hold the
+# process open until Docker's SIGKILL; compose's stop_grace_period sits above it.
+CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--timeout-graceful-shutdown", "20"]

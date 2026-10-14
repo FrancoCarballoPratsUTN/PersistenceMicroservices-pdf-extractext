@@ -12,8 +12,10 @@ arranca el proceso, que es donde un ``SERVICE_API_TOKEN`` ausente es fatal
 (SPEC 2.5).
 """
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from time import perf_counter
 
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
@@ -34,6 +36,8 @@ from app.repositories.mongodb import MongoConnection
 from app.repositories.mongodb_text_repository import MongoTextRepository
 from app.services.text_service import TextService
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -43,6 +47,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     sigue en pie y ``/readyz`` reporta la caída, que es lo que el orquestador
     necesita para sacar la instancia de rotación sin un bucle de reinicio
     (SPEC 5.5).
+
+    El apagado tampoco puede fallar. Uvicorn ya terminó las peticiones en vuelo
+    antes de llegar aquí: lo que queda es soltar el pool, y un error al hacerlo
+    se registra en vez de convertir una parada limpia en una salida con error.
     """
     connection: MongoConnection = app.state.mongo
     await connection.start()
@@ -52,7 +60,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        await connection.close()
+        logger.info("Shutting down: closing the MongoDB connection.")
+        shutdown_started = perf_counter()
+        try:
+            await connection.close()
+        except Exception:
+            # El apagado nunca debe romper el proceso: se registra y se sigue.
+            logger.exception("The MongoDB connection could not be closed cleanly.")
+        else:
+            logger.info(
+                "Shutdown finished in %.1f ms.",
+                (perf_counter() - shutdown_started) * 1000,
+            )
 
 
 def create_app(

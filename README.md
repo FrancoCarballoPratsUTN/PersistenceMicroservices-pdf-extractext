@@ -33,11 +33,19 @@ un límite de tamaño en cero desactivaría el límite en silencio.
 
 ```bash
 uv sync
-uv run uvicorn app.main:create_app --factory --port 8000
+uv run uvicorn app.main:create_app --factory --port 8000 \
+    --timeout-graceful-shutdown 20
 ```
 
 La aplicación se construye con una fábrica (`--factory`) porque la configuración
 se resuelve al construirla, no al importar el módulo.
+
+`--timeout-graceful-shutdown 20` acota el apagado: ante un `SIGTERM`, Uvicorn
+deja de aceptar peticiones, termina las que están en vuelo, ejecuta el `lifespan`
+(que cierra el pool de MongoDB) y sale; si alguna se cuelga más de 20 s, el
+proceso no se queda esperando indefinidamente. En el contenedor, el
+`stop_grace_period: 30s` del `docker-compose.yml` deja holgura sobre ese límite
+para que Docker no envíe `SIGKILL` antes de que el cierre termine.
 
 Para las pruebas y el linter:
 

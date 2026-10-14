@@ -11,6 +11,7 @@ from typing import Any
 
 import httpx
 import pytest
+from pymongo.errors import OperationFailure
 
 from app.config import Settings
 from app.repositories.mongodb import MongoConnection
@@ -176,6 +177,47 @@ async def test_closing_twice_is_harmless() -> None:
     await connection.close()
 
     assert factory.client.closed is True
+
+
+async def test_a_driver_error_while_closing_is_swallowed(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Soltar el pool no puede tumbar el apagado: un error del driver se registra
+    y no se propaga."""
+    factory = FakeMongoClientFactory(close_error=OperationFailure("cannot close"))
+    connection = MongoConnection(build_settings(), client_factory=factory)
+    await connection.start()
+
+    with caplog.at_level(logging.WARNING, logger="app.repositories.mongodb"):
+        await connection.close()
+
+    assert any(record.levelno >= logging.WARNING for record in caplog.records)
+
+
+async def test_an_unexpected_error_while_closing_does_not_break_the_shutdown(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Un error que la conexión no anticipa lo atrapa la raíz de composición: el
+    lifespan termina igual en vez de morir durante el apagado."""
+    factory = FakeMongoClientFactory(close_error=RuntimeError("boom"))
+
+    with caplog.at_level(logging.ERROR, logger="app.main"):
+        async with build_running_app(factory) as (_, _):
+            pass
+
+    assert any(record.levelno >= logging.ERROR for record in caplog.records)
+
+
+async def test_the_shutdown_is_logged(caplog: pytest.LogCaptureFixture) -> None:
+    """Quien opera tiene que poder ver en el log que el servicio cerró y cuánto
+    tardó, no sólo que dejó de responder (SPEC 5.5)."""
+    with caplog.at_level(logging.INFO, logger="app.main"):
+        async with build_running_app(FakeMongoClientFactory()) as (_, _):
+            pass
+
+    messages = [record.getMessage().lower() for record in caplog.records]
+    assert any("shutting down" in message for message in messages)
+    assert any("shutdown finished" in message for message in messages)
 
 
 async def test_a_connection_that_never_started_is_not_available() -> None:

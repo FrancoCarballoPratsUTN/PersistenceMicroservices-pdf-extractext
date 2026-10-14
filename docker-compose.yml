@@ -73,6 +73,10 @@ services:
       - proxy
       - internal
     restart: unless-stopped
+    # Docker sends SIGTERM to uvicorn and waits this long before it SIGKILLs. It
+    # must exceed uvicorn's --timeout-graceful-shutdown (20s) so in-flight
+    # requests finish and the Mongo pool closes cleanly.
+    stop_grace_period: 30s
 
   mongo:
     image: mongo:7.0

@@ -77,10 +77,22 @@ class MongoConnection:
         return True
 
     async def close(self) -> None:
-        """Libera el cliente. Seguro de llamar más de una vez."""
+        """Libera el cliente. Seguro de llamar más de una vez.
+
+        Soltar el pool no puede ser la razón de que un apagado limpio salga con
+        error, así que un error del driver se registra y se traga, igual que
+        ``is_available`` nunca propaga un error de red. La raíz de composición
+        conserva un último seguro para lo que este método no anticipa.
+        """
         if self._client is None:
             return
-        await self._client.close()
+        try:
+            await self._client.close()
+        except PyMongoError as error:
+            logger.warning(
+                "The MongoDB client could not be closed cleanly: %s",
+                type(error).__name__,
+            )
 
     async def is_available(self) -> bool:
         """Pregunta a MongoDB si está. Nunca lanza, nunca se bloquea eternamente."""
