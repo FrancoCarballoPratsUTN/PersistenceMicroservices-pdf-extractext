@@ -17,7 +17,7 @@ import os
 import signal
 import socket
 from collections.abc import AsyncIterator, Callable
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from time import perf_counter
 from typing import Any
 
@@ -114,10 +114,8 @@ def _install_deregister_handler(
 
     def restore() -> None:
         for sig, previous in previous_handlers.items():
-            try:
+            with suppress(ValueError, AttributeError):
                 signal.signal(sig, previous)
-            except (ValueError, AttributeError):
-                pass
 
     return restore
 
