@@ -65,6 +65,14 @@ def _consul_registration() -> dict[str, object] | None:
     port = int(os.getenv("CONSUL_SERVICE_PORT", os.getenv("PORT", "8000")))
     service_name = os.getenv("CONSUL_SERVICE_NAME", "persistence")
     service_id = os.getenv("CONSUL_SERVICE_ID") or f"{service_name}-{address}"
+    tags_env = os.getenv("CONSUL_SERVICE_TAGS", "")
+    # Aceptar ';' o ',' como separador. Los tags permiten pasar labels/middlewares
+    # y patrones de routing al registro de Consul.
+    tags: list[str] = []
+    for part in tags_env.replace(",", ";").split(";"):
+        tag = part.strip()
+        if tag:
+            tags.append(tag)
     return {
         "address": os.getenv("CONSUL_HTTP_ADDR", ""),
         "token": os.getenv("CONSUL_HTTP_TOKEN", ""),
@@ -77,13 +85,7 @@ def _consul_registration() -> dict[str, object] | None:
             "CONSUL_SERVICE_CHECK_URL",
             f"http://{address}:{port}/readyz",
         ),
-        # Las comas son válidas dentro de un tag (por ejemplo, la lista de
-        # middlewares de un router), así que el separador externo es ';'.
-        "tags": [
-            tag.strip()
-            for tag in os.getenv("CONSUL_SERVICE_TAGS", "").split(";")
-            if tag.strip()
-        ],
+        "tags": tags,
     }
 
 
