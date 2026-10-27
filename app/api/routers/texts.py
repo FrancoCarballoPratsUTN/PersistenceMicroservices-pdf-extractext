@@ -1,9 +1,3 @@
-"""Los cuatro verbos de /texts (T10, T12, T13, T14).
-
-Solo Capa 1: leer el cuerpo, validarlo, entregar un comando al servicio y dar
-forma a la respuesta. Ningún detalle de persistencia cruza esta línea (SPEC 2.1).
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -30,16 +24,10 @@ router = APIRouter()
 
 
 def _ok(checksum: str) -> dict[str, str]:
-    """La respuesta que dan los dos verbos de escritura: qué pasó, y a qué."""
     return {"message": "OK", "checksum": checksum}
 
 
 async def _read_json(request: Request) -> Any:
-    """Devuelve el cuerpo como Python nativo, o lo rechaza.
-
-    Compartido por los dos endpoints que llevan cuerpo, para que la respuesta a
-    un cuerpo roto esté escrita una sola vez.
-    """
     try:
         return await request.json()
     except ValueError as error:
@@ -60,19 +48,6 @@ async def get_text(
     checksum: str | None = None,
     service: TextService = Depends(get_text_service),
 ) -> JSONResponse:
-    """Devuelve el texto almacenado bajo un checksum.
-
-    Args:
-        checksum: El checksum que se quiere leer, como cadena opaca.
-        service: El caso de uso que recupera el texto o informa de que no está.
-
-    Returns:
-        ``200`` con los seis miembros que promete la API.
-
-    Raises:
-        ValidationError: Si el parámetro de consulta falta o está en blanco.
-        TextNotFoundError: Si ningún texto lleva ese checksum.
-    """
     item = await service.find_by_checksum(require_str(checksum))
     return JSONResponse(content=to_api_dict(item))
 
@@ -93,20 +68,6 @@ async def create_text(
     request: Request,
     service: TextService = Depends(get_text_service),
 ) -> JSONResponse:
-    """Almacena un texto y apunta a dónde se puede leer.
-
-    Args:
-        request: La petición entrante, cuyo cuerpo lleva el texto a almacenar.
-        service: El caso de uso que decide si se puede almacenar.
-
-    Returns:
-        ``201`` con ``Location`` y un cuerpo que nombra el checksum almacenado.
-
-    Raises:
-        ValidationError: Si el cuerpo no es JSON, o no es un texto que se pueda
-            almacenar. El manejador lo convierte en un ``400`` con la forma de
-            RFC 9457.
-    """
     command = validate_create(await _read_json(request))
     await service.create(command)
     return JSONResponse(
@@ -132,25 +93,6 @@ async def update_text(
     checksum: str | None = None,
     service: TextService = Depends(get_text_service),
 ) -> JSONResponse:
-    """Cambia el nombre, los metadatos, o ambos, de un texto almacenado.
-
-    El checksum es el objetivo y vive en la cadena de consulta; el cuerpo solo
-    lleva lo que cambia (SPEC 4.3).
-
-    Args:
-        request: La petición entrante, cuyo cuerpo lleva los cambios.
-        checksum: El checksum del texto que se quiere cambiar.
-        service: El caso de uso que los aplica o informa de que el texto no está.
-
-    Returns:
-        ``200`` con el texto tal como queda tras la actualización.
-
-    Raises:
-        ValidationError: Si el parámetro de consulta o el cuerpo no son usables,
-            o si el cuerpo no pide ningún cambio.
-        ImmutableFieldError: Si el cuerpo lleva ``text`` o ``checksum``.
-        TextNotFoundError: Si ningún texto lleva ese checksum.
-    """
     changes = validate_update(await _read_json(request))
     item = await service.update(require_str(checksum), changes)
     return JSONResponse(content=to_api_dict(item))
@@ -170,21 +112,5 @@ async def delete_text(
     checksum: str | None = None,
     service: TextService = Depends(get_text_service),
 ) -> JSONResponse:
-    """Elimina un texto almacenado.
-
-    El cuerpo no se lee: un borrado no lleva nada que cambiar, solo el checksum
-    de lo que hay que eliminar (SPEC 4.4).
-
-    Args:
-        checksum: El checksum del texto que se quiere eliminar.
-        service: El caso de uso que lo elimina o informa de que no había ninguno.
-
-    Returns:
-        ``200`` con el checksum que se eliminó.
-
-    Raises:
-        ValidationError: Si el parámetro de consulta falta o está en blanco.
-        TextNotFoundError: Si ningún texto lleva ese checksum.
-    """
     await service.delete(require_str(checksum))
     return JSONResponse(content=_ok(checksum))

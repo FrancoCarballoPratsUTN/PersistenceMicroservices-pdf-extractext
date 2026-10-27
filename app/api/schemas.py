@@ -1,38 +1,3 @@
-"""El documento OpenAPI: mitad derivado, mitad escrito a mano (T17, T18).
-
-FastAPI publica un ``{}`` vacío para cada body, porque ninguna ruta declara un
-modelo en su firma del que leer un esquema. Este módulo aporta la mitad que
-falta, y lo hace de dos maneras distintas a propósito.
-
-Derivado, no transcrito
------------------------
-Cinco de los seis componentes salen de :func:`app.api.models.schema_of`, aplicada
-a los modelos de :mod:`app.api.models`. Eso es justo lo que busca T18: las reglas
-que aplica el servicio y la descripción de esas reglas son la misma declaración,
-así que el documento no puede alejarse del comportamiento que documenta.
-
-``Problem`` es la excepción, y tiene que serlo. Su enumeración de ``code`` se lee
-de :mod:`app.errors` en tiempo de ejecución, y ningún tipo estático puede
-derivarse de una introspección en runtime. Sigue escrito a mano, y
-``tests/integration/api/test_openapi.py`` compara su ``enum`` con el vocabulario
-de errores, así que tampoco puede separarse de :mod:`app.errors`.
-
-Las tres cosas que FastAPI hace mal
------------------------------------
-No publica componentes, porque no tiene un modelo del que leerlos y el
-``openapi_extra`` que acepta su constructor nunca se mezcla. Inventa un ``422``
-para el query param ``checksum``, al que este servicio responde con
-``400 VALIDATION_ERROR`` en su lugar (SPEC 2.3). Y llama opcional a ese
-parámetro, porque la ruta lo declara opcional para poder leerlo y rechazarlo a
-mano.
-
-Ninguna de las tres se puede arreglar desde el ``openapi_extra`` de una ruta: la
-fusión añade claves, no puede quitar una, y concatena listas en vez de
-reemplazarlas. Así que se corrigen sobre el documento ya terminado, en
-:func:`publish`. También sobreviven a T18: los bodies de la petición los validan
-las rutas y no FastAPI, precisamente para que nunca se produzca un ``422``.
-"""
-
 from typing import Any
 
 from fastapi import FastAPI
@@ -55,16 +20,6 @@ SECURITY: list[dict[str, list[str]]] = [{BEARER: []}]
 
 
 def _codes() -> list[str]:
-    """Devuelve todos los codes que define el vocabulario de errores.
-
-    Todas las clases de :mod:`app.errors` derivan directamente de
-    ``ServiceError``, así que sus subclases son todo el vocabulario. Una subclase
-    anidada tendría que añadirse a la matriz de SPEC 6.2, y la guarda de
-    ``tests/integration/api/test_openapi.py`` compara las dos listas.
-
-    Returns:
-        Los codes, ordenados para que el documento publicado sea estable.
-    """
     return sorted(error.code for error in ServiceError.__subclasses__())
 
 
@@ -82,9 +37,6 @@ _ACKNOWLEDGEMENT = schema_of(AcknowledgementOut, "What POST and DELETE answer wi
 
 _PROBE = schema_of(ProbeOut, "What the probes answer with.")
 
-# The one component written by hand: its `code` enumeration is read off
-# app.errors at runtime, which no static model could carry (see the module
-# docstring).
 _PROBLEM = {
     "type": "object",
     "description": "Every failure, as RFC 9457 defines it plus a `code`.",
@@ -132,7 +84,6 @@ _FAILURES = {
     "503": "MongoDB is unreachable, or answered with an error.",
 }
 
-# The schemas FastAPI builds to describe a 422, which this service never sends.
 _PYDANTIC_VALIDATION_SCHEMAS = ("HTTPValidationError", "ValidationError")
 
 
@@ -141,41 +92,14 @@ def _ref(name: str) -> dict[str, str]:
 
 
 def accepts(name: str) -> dict[str, Any]:
-    """Devuelve el body de petición de un verbo, usando el componente indicado.
-
-    Args:
-        name: El esquema de componente que describe el body aceptado.
-
-    Returns:
-        Un body de petición obligatorio, como lo son los dos verbos que lo
-        llevan.
-    """
     return {"required": True, "content": {JSON: {"schema": _ref(name)}}}
 
 
 def answered_with(name: str, description: str) -> dict[str, Any]:
-    """Devuelve una respuesta de éxito usando el componente indicado.
-
-    Args:
-        name: El esquema de componente que describe el body de la respuesta.
-        description: Qué significa la respuesta, para quien lea ``/docs``.
-
-    Returns:
-        Un objeto de respuesta para colgarlo del status al que pertenece.
-    """
     return {"description": description, "content": {JSON: {"schema": _ref(name)}}}
 
 
 def failing_with(*statuses: str) -> dict[str, Any]:
-    """Devuelve las respuestas de documento problem para los status dados.
-
-    Args:
-        statuses: Los statuses con los que puede fallar este verbo, como cadenas.
-
-    Returns:
-        Un objeto de respuesta por status, cada uno un ``Problem`` bajo el tipo de
-        medio problem.
-    """
     return {
         status: {
             "description": _FAILURES[status],
@@ -186,16 +110,6 @@ def failing_with(*statuses: str) -> dict[str, Any]:
 
 
 def _drop_pydantic_validation(document: dict[str, Any]) -> None:
-    """Quita en el sitio lo que FastAPI inventó para describir un 422.
-
-    ``HTTPValidationError`` y ``ValidationError`` son la forma que FastAPI da a un
-    422. Una vez desaparecido el 422 inventado nada apunta a ellos, y el nombre
-    ``ValidationError`` se lee como nuestro propio ``VALIDATION_ERROR``, cuyo
-    documento es un problema y no una lista de errores de campo.
-
-    Args:
-        document: El documento que se está corrigiendo.
-    """
     for path in document.get("paths", {}).values():
         for operation in path.values():
             operation.get("responses", {}).pop("422", None)
@@ -205,16 +119,6 @@ def _drop_pydantic_validation(document: dict[str, Any]) -> None:
 
 
 def _require_the_checksum(document: dict[str, Any]) -> None:
-    """Dice que el checksum es obligatorio, cosa que la firma no puede expresar.
-
-    La ruta declara ``checksum: str | None = None`` precisamente para poder
-    rechazar un checksum ausente con ``400 VALIDATION_ERROR`` (SPEC 3.3). Leída
-    como firma, eso también vuelve opcional el parámetro en el documento, justo
-    al lado de un 400 que el servicio sí manda.
-
-    Args:
-        document: El documento que se está corrigiendo.
-    """
     for path in document.get("paths", {}).values():
         for operation in path.values():
             for parameter in operation.get("parameters", []):
@@ -224,12 +128,6 @@ def _require_the_checksum(document: dict[str, Any]) -> None:
 
 
 def publish(app: FastAPI) -> None:
-    """Hace que ``app`` sirva un documento que describa este servicio.
-
-    Args:
-        app: La aplicación a corregir. FastAPI cachea el documento que construye,
-            así que esto va en la fábrica, antes de la primera petición.
-    """
     generated = app.openapi
 
     def openapi() -> dict[str, Any]:
