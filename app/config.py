@@ -148,3 +148,8 @@ def get_settings(environ: Mapping[str, str] = os.environ) -> Settings:
         ),
         log_level=_log_level(log_level_value),
     )
+
+
+def get_settings_from_values(values: Mapping[str, str]) -> Settings:
+    """Build settings from a validated external source such as Consul KV."""
+    return get_settings(values)
