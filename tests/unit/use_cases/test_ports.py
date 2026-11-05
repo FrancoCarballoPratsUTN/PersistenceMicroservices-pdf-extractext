@@ -2,6 +2,9 @@
 
 from datetime import UTC, datetime
 
+import pytest
+
+from app.errors import ChecksumAlreadyExistsError
 from app.use_cases.ports import StoredText, TextChanges, TextRepository
 from tests.fakes.fake_text_repository import FakeTextRepository
 
@@ -102,14 +105,12 @@ async def test_calls_counters_track_invocations() -> None:
     assert repo.calls["count"] >= 1
 
 
-async def test_duplicate_barrier_raises() -> None:
+async def test_duplicate_barrier_raises_domain_error() -> None:
     """La barrera simula un duplicado."""
     repo = FakeTextRepository()
     repo.should_fail_duplicate = True
     now = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
-    from app.errors import DuplicateKeyError
-
-    try:
+    with pytest.raises(ChecksumAlreadyExistsError):
         await repo.insert(
             StoredText(
                 checksum="abc123",
@@ -118,9 +119,16 @@ async def test_duplicate_barrier_raises() -> None:
                 updated_at=now,
             )
         )
-        raise AssertionError()
-    except DuplicateKeyError:
-        pass
+
+
+async def test_existing_checksum_raises_domain_error() -> None:
+    repo = FakeTextRepository()
+    now = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
+    item = StoredText(checksum="abc123", text="t", created_at=now, updated_at=now)
+    await repo.insert(item)
+
+    with pytest.raises(ChecksumAlreadyExistsError):
+        await repo.insert(item)
 
 
 async def test_too_large_barrier_raises() -> None:
@@ -130,7 +138,7 @@ async def test_too_large_barrier_raises() -> None:
     now = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
     from app.errors import DocumentTooLargeError
 
-    try:
+    with pytest.raises(DocumentTooLargeError):
         await repo.insert(
             StoredText(
                 checksum="abc123",
@@ -139,6 +147,3 @@ async def test_too_large_barrier_raises() -> None:
                 updated_at=now,
             )
         )
-        raise AssertionError()
-    except DocumentTooLargeError:
-        pass

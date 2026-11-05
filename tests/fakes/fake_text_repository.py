@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.errors import DocumentTooLargeError, DuplicateKeyError
+from app.errors import ChecksumAlreadyExistsError, DocumentTooLargeError
 from app.use_cases.ports import StoredText, TextChanges, TextRepository
 
 
@@ -43,11 +43,11 @@ class FakeTextRepository:
         if self._insert_error is not None:
             raise self._insert_error
         if self.should_fail_duplicate:
-            raise DuplicateKeyError("simulated duplicate")
+            raise ChecksumAlreadyExistsError("simulated duplicate")
         if self.should_fail_too_large:
             raise DocumentTooLargeError("simulated too large")
         if item.checksum in self._store:
-            raise DuplicateKeyError(f"checksum exists {item.checksum}")
+            raise ChecksumAlreadyExistsError(f"checksum exists {item.checksum}")
         self._store[item.checksum] = item
 
     async def get_by_checksum(self, checksum: str) -> StoredText | None:

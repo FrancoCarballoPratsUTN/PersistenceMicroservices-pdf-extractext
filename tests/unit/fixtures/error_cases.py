@@ -2,6 +2,7 @@ import pytest
 
 from app.errors import (
     ChecksumAlreadyExistsError,
+    DocumentTooLargeError,
     ImmutableFieldError,
     InternalError,
     MethodNotAllowedError,
@@ -62,6 +63,14 @@ ERROR_MATRIX = [
         "/problems/payload_too_large",
         "Payload too large",
         id="413-too-large",
+    ),
+    pytest.param(
+        DocumentTooLargeError,
+        "PAYLOAD_TOO_LARGE",
+        413,
+        "/problems/payload_too_large",
+        "Payload too large",
+        id="413-document-too-large",
     ),
     pytest.param(
         UnsupportedMediaTypeError,

@@ -13,6 +13,8 @@ import pytest
 
 from app.errors import (
     ChecksumAlreadyExistsError,
+    DocumentTooLargeError,
+    PayloadTooLargeError,
     ServiceError,
     TextNotFoundError,
     UnauthorizedError,
@@ -43,6 +45,12 @@ def test_the_three_loading_bearing_statuses():
     assert ChecksumAlreadyExistsError.status == 409
     assert TextNotFoundError.status == 404
     assert UnauthorizedError.status == 401
+
+
+def test_document_too_large_uses_payload_too_large_contract():
+    assert issubclass(DocumentTooLargeError, PayloadTooLargeError)
+    assert DocumentTooLargeError.status == 413
+    assert DocumentTooLargeError.code == "PAYLOAD_TOO_LARGE"
 
 
 def test_detail_behavior():

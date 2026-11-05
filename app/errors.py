@@ -141,11 +141,7 @@ class PersistenceError(ServiceError):
     default_detail = "The persistence layer is unavailable."
 
 
-class DuplicateKeyError(Exception):
-    """Error de clave duplicada de MongoDB (pymongo.errors.DuplicateKeyError)."""
-
-
-class DocumentTooLargeError(Exception):
+class DocumentTooLargeError(PayloadTooLargeError):
     """Error de documento demasiado grande de MongoDB.
 
     Equivale a ``pymongo.errors.DocumentTooLarge``.

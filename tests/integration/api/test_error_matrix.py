@@ -28,7 +28,7 @@ from dataclasses import dataclass
 import pytest
 from fastapi.testclient import TestClient
 from httpx import Response
-from pymongo.errors import ServerSelectionTimeoutError
+from pymongo.errors import DocumentTooLarge, ServerSelectionTimeoutError
 
 from app.api.problem import PROBLEM_MEDIA_TYPE
 from app.config import Settings
@@ -72,6 +72,7 @@ class Row:
     code: str
     provoke: Callable[[TestClient], Response]
     find_error: Exception | None = None
+    insert_error: Exception | None = None
     rethrow: bool = True
 
 
@@ -131,6 +132,12 @@ def _read_over_a_broken_database(client: TestClient) -> Response:
 
 
 ROWS = [
+    Row(
+        413,
+        "PAYLOAD_TOO_LARGE",
+        lambda client: client.post("/texts", json=NEW_TEXT, headers=AUTH),
+        insert_error=DocumentTooLarge("document is too large"),
+    ),
     Row(409, "CHECKSUM_ALREADY_EXISTS", _post_the_same_checksum_twice),
     Row(404, "TEXT_NOT_FOUND", _read_missing_text),
     Row(401, "UNAUTHORIZED", _post_without_credentials),
@@ -164,7 +171,10 @@ PROTECTED_CALLS = [
 
 
 def _running(
-    *, find_error: Exception | None = None, rethrow: bool = True
+    *,
+    find_error: Exception | None = None,
+    insert_error: Exception | None = None,
+    rethrow: bool = True,
 ) -> TestClient:
     """Devuelve toda la app sirviendo en memoria, sobre una base de datos que puede
     estar rota.
@@ -183,7 +193,10 @@ def _running(
         max_text_body_bytes=BODY_LIMIT,
     )
     connection = MongoConnection(
-        settings, client_factory=FakeMongoClientFactory(find_error=find_error)
+        settings,
+        client_factory=FakeMongoClientFactory(
+            find_error=find_error, insert_error=insert_error
+        ),
     )
     app = create_app(settings=settings, connection=connection)
     return TestClient(app, raise_server_exceptions=rethrow)
@@ -198,7 +211,11 @@ def row(request: pytest.FixtureRequest) -> Row:
 @pytest.fixture
 def client(row: Row) -> Iterator[TestClient]:
     """Una app en marcha que lleva exactamente los fallos que su fila necesita."""
-    with _running(find_error=row.find_error, rethrow=row.rethrow) as running:
+    with _running(
+        find_error=row.find_error,
+        insert_error=row.insert_error,
+        rethrow=row.rethrow,
+    ) as running:
         yield running
 
 
