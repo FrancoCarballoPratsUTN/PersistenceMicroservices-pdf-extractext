@@ -12,6 +12,7 @@ arranca el proceso, que es donde un ``SERVICE_API_TOKEN`` ausente es fatal
 (SPEC 2.5).
 """
 
+import asyncio
 import logging
 import os
 import signal
@@ -90,6 +91,11 @@ def _consul_registration() -> dict[str, object] | None:
     }
 
 
+async def _register_service_off_event_loop(registration: dict[str, object]) -> None:
+    """Registrar en Consul sin bloquear el event loop durante el arranque."""
+    await asyncio.to_thread(register_service, **registration)
+
+
 def _install_deregister_handler(
     deregister: Callable[[], None],
 ) -> Callable[[], None]:
@@ -152,7 +158,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.text_service = TextService(MongoTextRepository(connection.texts()))
     registration = _consul_registration()
     if registration is not None:
-        register_service(**registration)
+        await _register_service_off_event_loop(registration)
 
     deregistered = False
 

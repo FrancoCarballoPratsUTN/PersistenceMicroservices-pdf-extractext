@@ -1,11 +1,20 @@
-"""Minimal Consul agent API client for service lifecycle."""
+"""Minimal Consul agent API client for service lifecycle.
+
+Transient registry failures are retried with bounded exponential backoff: three
+attempts total, with short waits between them. A final failure is reported as
+``ConsulConfigurationError`` so startup has one explicit failure mode.
+"""
 
 import json
 import ssl
-from urllib.error import HTTPError, URLError
+from time import sleep
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from app.consul import ConsulConfigurationError
+
+_MAX_ATTEMPTS = 3
+_BACKOFF_SECONDS = 0.1
 
 
 def register_service(
@@ -71,10 +80,13 @@ def _request(
     timeout: float,
     ca_file: str | None,
 ) -> None:
-    if not address.strip() or not token.strip():
+    address = address.strip()
+    token = token.strip()
+    if not address or not token:
         raise ConsulConfigurationError(
             "CONSUL_HTTP_ADDR and CONSUL_HTTP_TOKEN are required"
         )
+
     body = None if payload is None else json.dumps(payload).encode()
     request = Request(
         f"{address.rstrip('/')}{path}",
@@ -82,14 +94,22 @@ def _request(
         method="PUT",
         headers={"X-Consul-Token": token, "Content-Type": "application/json"},
     )
-    try:
-        context = ssl.create_default_context(cafile=ca_file) if ca_file else None
-        with urlopen(request, timeout=timeout, context=context) as response:
-            if response.status // 100 != 2:
+    context = ssl.create_default_context(cafile=ca_file) if ca_file else None
+
+    for attempt in range(_MAX_ATTEMPTS):
+        try:
+            with urlopen(request, timeout=timeout, context=context) as response:
+                response.read()
+            return
+        except HTTPError as error:
+            if error.code < 500 or attempt == _MAX_ATTEMPTS - 1:
                 raise ConsulConfigurationError(
-                    f"Consul service request returned HTTP {response.status}"
-                )
-    except (HTTPError, URLError, TimeoutError) as error:
-        raise ConsulConfigurationError(
-            "unable to update Consul service registry"
-        ) from error
+                    f"Consul service request returned HTTP {error.code}"
+                ) from error
+        except OSError as error:
+            if attempt == _MAX_ATTEMPTS - 1:
+                raise ConsulConfigurationError(
+                    "unable to update Consul service registry"
+                ) from error
+
+        sleep(_BACKOFF_SECONDS * (2**attempt))

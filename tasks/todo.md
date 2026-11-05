@@ -414,12 +414,12 @@ Este servicio **cambia** el contrato. Antes de conectarlo:
 **Deps:** R6 · **Files:** `app/main.py`, `app/config.py`, `tests/unit/test_config.py`, `tests/unit/api/test_middleware.py` · **Scope:** Small
 
 ### R9: Consul no bloqueante, con retry y parseo seguro
-- [ ] `register_service` con `asyncio.to_thread`.
-- [ ] Retry/backoff o fail-fast documentado y testeado.
-- [ ] `KeyError`/`TypeError`/`ValueError`/`UnicodeDecodeError` ⇒ `ConsulConfigurationError`.
-- [ ] Política explícita para prefijo vacío.
-- [ ] Eliminar chequeo redundante de `response.status`.
-- [ ] Tests de respuesta malformada y retry/no bloqueo.
+- [x] `register_service` con `asyncio.to_thread`.
+- [x] Retry/backoff o fail-fast documentado y testeado.
+- [x] `KeyError`/`TypeError`/`ValueError`/`UnicodeDecodeError` ⇒ `ConsulConfigurationError`.
+- [x] Política explícita para prefijo vacío.
+- [x] Eliminar chequeo redundante de `response.status`.
+- [x] Tests de respuesta malformada y retry/no bloqueo.
 
 **AC:** Consul no bloquea el event loop · parseo seguro · fallo con política clara.
 **Verify:** `uv run pytest tests/unit/test_consul.py` · test `[{}]` ⇒ `ConsulConfigurationError`.
