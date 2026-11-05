@@ -13,7 +13,7 @@ cómo arrancarlo y cómo falar con él.
 
 ## Variables de entorno
 
-Ocho variables, siete con valor por defecto. `SERVICE_API_TOKEN` **no** tiene
+Nueve variables, ocho con valor por defecto. `SERVICE_API_TOKEN` **no** tiene
 valor por defecto: sin ella el proceso no arranca (SPEC 2.5).
 
 | Variable | Por defecto | Qué es |
@@ -26,9 +26,15 @@ valor por defecto: sin ella el proceso no arranca (SPEC 2.5).
 | `MONGO_TIMEOUT_MS` | `5000` | Timeout de cada operación contra Mongo. |
 | `MAX_TEXT_BODY_BYTES` | `10485760` | Tamaño máximo del body (10 MiB). |
 | `LOG_LEVEL` | `INFO` | Nivel mínimo del logging (`DEBUG`, `INFO`, `WARNING`, ...). |
+| `CORS_ALLOW_ORIGINS` | vacío | Orígenes permitidos, separados por coma. Vacío = CORS cerrado. |
 
 Un valor numérico que no sea un entero positivo detiene el arranque: un timeout o
 un límite de tamaño en cero desactivaría el límite en silencio.
+
+CORS está cerrado por defecto: no se instala `CORSMiddleware` salvo que
+`CORS_ALLOW_ORIGINS` declare una lista explícita. El comodín `*` se rechaza al
+arrancar; un preflight sólo recibe `Access-Control-Allow-Origin` para un origen
+de esa lista.
 
 ## Arranque
 

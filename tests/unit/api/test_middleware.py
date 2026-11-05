@@ -27,6 +27,7 @@ TOKEN = "token-for-tests-0123456789"
 AUTH = {"Authorization": f"Bearer {TOKEN}"}
 JSON = {"Content-Type": "application/json"}
 BODY = '{"checksum":"abc123","text":"hello"}'
+CORS_ORIGIN = "https://app.example"
 
 
 async def _send_body_through_limit(
@@ -90,11 +91,16 @@ async def _send_body_through_limit(
     return status, downstream_body, downstream_messages, receive_count
 
 
-def build_client(*, max_body_bytes: int = 10485760) -> Iterator[TestClient]:
+def build_client(
+    *,
+    max_body_bytes: int = 10485760,
+    cors_allow_origins: tuple[str, ...] = (),
+) -> Iterator[TestClient]:
     settings = Settings(
         service_api_token=TOKEN,
         mongo_uri="mongodb://test:27017",
         max_text_body_bytes=max_body_bytes,
+        cors_allow_origins=cors_allow_origins,
     )
     connection = MongoConnection(settings, client_factory=FakeMongoClientFactory())
     with TestClient(create_app(settings=settings, connection=connection)) as client:
@@ -111,6 +117,12 @@ def small_client() -> Iterator[TestClient]:
     """Un cliente cuyo límite de cuerpo son 100 bytes, para mantener los tests
     pequeños."""
     yield from build_client(max_body_bytes=100)
+
+
+@pytest.fixture
+def cors_client() -> Iterator[TestClient]:
+    """Un cliente que sólo permite el origen usado por los tests de CORS."""
+    yield from build_client(cors_allow_origins=(CORS_ORIGIN,))
 
 
 # --- 415: el tipo de contenido ---------------------------------------------
@@ -327,31 +339,60 @@ def test_a_401_echoes_the_request_id(client: TestClient) -> None:
 # --- CORS ------------------------------------------------------------------
 
 
-def test_a_preflight_request_is_answered(client: TestClient) -> None:
-    """Un preflight no lleva credenciales, asi que CORS lo responde fuera del token.
-
-    Starlette responde un preflight con ``200``; SPEC pedia ``204``. Ambos dicen
-    lo mismo a un navegador -- el preflight nunca llega al recurso -- y forzar el
-    otro codigo significaria envolver la biblioteca para cambiar un digito.
-    """
+def test_cors_is_closed_by_default(client: TestClient) -> None:
     response = client.options(
         "/texts",
         headers={
-            "Origin": "http://localhost:5173",
+            "Origin": CORS_ORIGIN,
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+
+    assert "access-control-allow-origin" not in response.headers
+
+
+def test_a_configured_origin_is_answered_in_a_preflight(
+    cors_client: TestClient,
+) -> None:
+    """Un preflight no lleva credenciales, así que CORS lo responde fuera del token.
+
+    Starlette responde un preflight con ``200``; SPEC pedía ``204``. Ambos dicen
+    lo mismo a un navegador -- el preflight nunca llega al recurso -- y forzar el
+    otro código significaría envolver la biblioteca para cambiar un dígito.
+    """
+    response = cors_client.options(
+        "/texts",
+        headers={
+            "Origin": CORS_ORIGIN,
             "Access-Control-Request-Method": "POST",
         },
     )
 
     assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == CORS_ORIGIN
+
+
+def test_an_unconfigured_origin_does_not_receive_cors_headers(
+    cors_client: TestClient,
+) -> None:
+    response = cors_client.options(
+        "/texts",
+        headers={
+            "Origin": "https://evil.example",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+
+    assert "access-control-allow-origin" not in response.headers
 
 
 def test_the_allowed_methods_are_the_four_verbs_and_options(
-    client: TestClient,
+    cors_client: TestClient,
 ) -> None:
-    response = client.options(
+    response = cors_client.options(
         "/texts",
         headers={
-            "Origin": "http://localhost:5173",
+            "Origin": CORS_ORIGIN,
             "Access-Control-Request-Method": "POST",
         },
     )
@@ -364,6 +405,21 @@ def test_the_allowed_methods_are_the_four_verbs_and_options(
         "DELETE",
         "OPTIONS",
     }
+
+
+def test_the_preflight_allows_the_request_id_header(
+    cors_client: TestClient,
+) -> None:
+    response = cors_client.options(
+        "/texts",
+        headers={
+            "Origin": CORS_ORIGIN,
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "X-Request-ID",
+        },
+    )
+
+    assert "x-request-id" in response.headers["access-control-allow-headers"].lower()
 
 
 # --- el log de acceso ------------------------------------------------------

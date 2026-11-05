@@ -53,6 +53,24 @@ def _log_level(value: str | None, default: str = "INFO") -> str:
     return name
 
 
+def _cors_origins(value: str | None) -> tuple[str, ...]:
+    """Lee una lista explicita de origenes separados por coma.
+
+    El valor vacio deja CORS cerrado. El comodin se rechaza porque este servicio
+    no necesita exponerse a cualquier origen.
+    """
+    if value is None:
+        return ()
+
+    origins = tuple(item.strip() for item in value.split(",") if item.strip())
+    if "*" in origins:
+        raise ConfigurationError(
+            "CORS_ALLOW_ORIGINS must list explicit origins, not '*'."
+        )
+
+    return origins
+
+
 @dataclass(frozen=True)
 class Settings:
     service_api_token: str
@@ -63,6 +81,7 @@ class Settings:
     mongo_timeout_ms: int = 5000
     max_text_body_bytes: int = 10485760
     log_level: str = "INFO"
+    cors_allow_origins: tuple[str, ...] = ()
 
 
 def get_settings(environ: Mapping[str, str] | None = None) -> Settings:
@@ -93,4 +112,5 @@ def get_settings(environ: Mapping[str, str] | None = None) -> Settings:
             10485760,
         ),
         log_level=_log_level(environ.get("LOG_LEVEL")),
+        cors_allow_origins=_cors_origins(environ.get("CORS_ALLOW_ORIGINS")),
     )

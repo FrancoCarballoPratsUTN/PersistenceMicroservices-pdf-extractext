@@ -403,11 +403,11 @@ Este servicio **cambia** el contrato. Antes de conectarlo:
 **Deps:** — · **Files:** `pyproject.toml`, `uv.lock` · **Scope:** XS
 
 ### R8: CORS cerrado por defecto o eliminado
-- [ ] Eliminar `allow_origins=["*"]`.
-- [ ] Sin clientes navegador: quitar `CORSMiddleware`.
-- [ ] Con clientes: `CORS_ALLOW_ORIGINS` explícito.
-- [ ] Preflight solo para origen permitido.
-- [ ] Tests de CORS actualizados.
+- [x] Eliminar `allow_origins=["*"]`.
+- [x] Sin clientes navegador: quitar `CORSMiddleware`.
+- [x] Con clientes: `CORS_ALLOW_ORIGINS` explícito.
+- [x] Preflight solo para origen permitido.
+- [x] Tests de CORS actualizados.
 
 **AC:** no hay wildcard · comportamiento por defecto cerrado.
 **Verify:** `uv run pytest tests/unit/api/test_middleware.py -k "cors or preflight"` · `curl -i -H "Origin: https://evil.example" ...` sin `access-control-allow-origin: *`.

@@ -245,10 +245,11 @@ def create_app(
     app.add_middleware(BearerAuthMiddleware, settings=resolved)
     app.add_middleware(AccessLogMiddleware)
     app.add_middleware(RequestIdMiddleware)
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_methods=CORS_METHODS,
-        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
-    )
+    if resolved.cors_allow_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=list(resolved.cors_allow_origins),
+            allow_methods=CORS_METHODS,
+            allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+        )
     return app

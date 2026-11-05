@@ -28,6 +28,7 @@ ALL_VARIABLES = (
     "MONGO_TIMEOUT_MS",
     "MAX_TEXT_BODY_BYTES",
     "LOG_LEVEL",
+    "CORS_ALLOW_ORIGINS",
 )
 
 
@@ -61,6 +62,7 @@ def test_the_documented_defaults_apply_when_only_the_token_is_set(token):
     assert settings.mongo_timeout_ms == 5000
     assert settings.max_text_body_bytes == 10485760
     assert settings.log_level == "INFO"
+    assert settings.cors_allow_origins == ()
 
 
 def test_injected_values_are_the_only_configuration_source(monkeypatch):
@@ -134,6 +136,7 @@ def test_every_documented_default_matches_the_spec_table(token):
         "MONGO_TIMEOUT_MS": settings.mongo_timeout_ms,
         "MAX_TEXT_BODY_BYTES": settings.max_text_body_bytes,
         "LOG_LEVEL": settings.log_level,
+        "CORS_ALLOW_ORIGINS": settings.cors_allow_origins,
     }
 
     assert documented == {
@@ -144,6 +147,7 @@ def test_every_documented_default_matches_the_spec_table(token):
         "MONGO_TIMEOUT_MS": 5000,
         "MAX_TEXT_BODY_BYTES": 10485760,
         "LOG_LEVEL": "INFO",
+        "CORS_ALLOW_ORIGINS": (),
     }
 
 
@@ -283,6 +287,7 @@ def test_settings_expose_exactly_the_documented_variables(token):
         "mongo_timeout_ms",
         "max_text_body_bytes",
         "log_level",
+        "cors_allow_origins",
     }
 
 
@@ -311,4 +316,36 @@ def test_an_unknown_log_level_is_reported_as_a_configuration_error(
     clean_environment.setenv("LOG_LEVEL", "verbose")
 
     with pytest.raises(ConfigurationError, match="LOG_LEVEL"):
+        get_settings()
+
+
+def test_cors_is_closed_by_default(token):
+    assert get_settings().cors_allow_origins == ()
+
+
+def test_cors_origins_are_read_as_a_comma_separated_list(clean_environment):
+    clean_environment.setenv("SERVICE_API_TOKEN", "s3cr3t-token")
+    clean_environment.setenv(
+        "CORS_ALLOW_ORIGINS",
+        " https://app.example , https://admin.example ",
+    )
+
+    assert get_settings().cors_allow_origins == (
+        "https://app.example",
+        "https://admin.example",
+    )
+
+
+def test_blank_cors_entries_are_ignored(clean_environment):
+    clean_environment.setenv("SERVICE_API_TOKEN", "s3cr3t-token")
+    clean_environment.setenv("CORS_ALLOW_ORIGINS", " , https://app.example , ")
+
+    assert get_settings().cors_allow_origins == ("https://app.example",)
+
+
+def test_the_wildcard_is_rejected_as_a_cors_origin(clean_environment):
+    clean_environment.setenv("SERVICE_API_TOKEN", "s3cr3t-token")
+    clean_environment.setenv("CORS_ALLOW_ORIGINS", "*")
+
+    with pytest.raises(ConfigurationError, match="CORS_ALLOW_ORIGINS"):
         get_settings()

@@ -893,7 +893,7 @@ R6→R11→R17 (configuración/Mongo), R2→R13 (repositorio) y R16/R20 al final
 
 - [x] **R6: configuración con una sola fuente y sin alias.**
 - [x] **R7: dependencias declaradas correctamente (`python-dotenv`, sin `pydantic-settings`).**
-- [ ] **R8: CORS cerrado por defecto o eliminado.**
+- [x] **R8: CORS cerrado por defecto o eliminado.**
 - [ ] **R9: Consul no bloqueante, con retry y parseo seguro.**
 - [ ] **R10: eliminar métricas y confirmar que `/metrics` es `404`.**
 
@@ -1160,17 +1160,17 @@ explícita y configurar el middleware con esa lista. Mantener `X-Request-ID` en
 `allow_headers` cuando CORS exista.
 
 **Acceptance criteria:**
-- [ ] No queda `allow_origins=["*"]` en el código.
-- [ ] Por defecto no se permite ningún origen cruzado.
-- [ ] Si se configura un origen permitido, el preflight responde solo para ese
+- [x] No queda `allow_origins=["*"]` en el código.
+- [x] Por defecto no se permite ningún origen cruzado.
+- [x] Si se configura un origen permitido, el preflight responde solo para ese
       origen; un origen no permitido no recibe `Access-Control-Allow-Origin`.
-- [ ] Tests de CORS actualizados o eliminados si el middleware se retira.
-- [ ] README documenta la decisión y la variable, si aplica.
+- [x] Tests de CORS actualizados o eliminados si el middleware se retira.
+- [x] README documenta la decisión y la variable, si aplica.
 
 **Verification:**
-- [ ] `uv run pytest tests/unit/api/test_middleware.py -k "cors or preflight"`
-- [ ] `uv run pytest tests/unit/test_config.py -k "cors"`
-- [ ] Manual: `curl -i -H "Origin: https://evil.example" ...` ⇒ sin
+- [x] `uv run pytest tests/unit/api/test_middleware.py -k "cors or preflight"`
+- [x] `uv run pytest tests/unit/test_config.py -k "cors"`
+- [x] Manual: `curl -i -H "Origin: https://evil.example" ...` ⇒ sin
       `access-control-allow-origin: *`.
 
 **Dependencies:** R6
