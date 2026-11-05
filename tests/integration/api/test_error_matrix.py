@@ -302,5 +302,7 @@ def test_503_hides_mongo_error(caplog) -> None:
     assert response.status_code == 503
     assert response.json()["detail"] == PersistenceError.default_detail
     assert message not in response.text
-    assert f"operation=find_one request_id={request_id} " \
+    assert (
+        f"operation=find_one request_id={request_id} "
         f"error_type=OperationFailure error={message}" in caplog.text
+    )

@@ -112,7 +112,7 @@ def _install_deregister_handler(
         try:
             previous_handlers[sig] = signal.getsignal(sig)
             signal.signal(sig, handle_signal)
-        except (ValueError, AttributeError):
+        except ValueError, AttributeError:
             previous_handlers.pop(sig, None)
 
     def restore() -> None:
