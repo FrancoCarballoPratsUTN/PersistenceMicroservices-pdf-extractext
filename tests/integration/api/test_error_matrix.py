@@ -15,11 +15,10 @@ cuerpo.
 
 Los fallos se inyectan en la *base de datos*, no en la app
 ---------------------------------------------------------
-Una fila que necesita que MongoDB se comporte mal recibe un cliente fake que
-lanza excepción en una lectura. No se parchea nada dentro de ``app/``, así que
-el mapeo de un fallo del driver a un estado es el de producción: ``503`` demuestra
-que el repositorio traduce un ``PyMongoError``, y ``500`` que la red de seguridad
-responde a una excepción que nadie clasificó.
+Una fila que necesita que MongoDB se comporte mal configura el cliente fake para
+lanzar una excepción en la operación correspondiente. No se parchea nada dentro
+de ``app/``, así que ``503`` comprueba la traducción del repositorio y ``500`` que
+la red de seguridad responde a una excepción que nadie clasificó.
 """
 
 from collections.abc import Callable, Iterator
@@ -28,10 +27,15 @@ from dataclasses import dataclass
 import pytest
 from fastapi.testclient import TestClient
 from httpx import Response
-from pymongo.errors import DocumentTooLarge, ServerSelectionTimeoutError
+from pymongo.errors import (
+    DocumentTooLarge,
+    OperationFailure,
+    ServerSelectionTimeoutError,
+)
 
 from app.api.problem import PROBLEM_MEDIA_TYPE
 from app.config import Settings
+from app.errors import PersistenceError
 from app.main import create_app
 from app.repositories.mongodb import MongoConnection
 from tests.fakes.fake_mongo_client import FakeMongoClientFactory
@@ -59,8 +63,7 @@ class Row:
         status: El estado HTTP que la fila le debe al cliente.
         code: El nombre legible por máquina que el cuerpo debe llevar.
         provoke: Envía la petición que dispara la fila y devuelve la respuesta.
-        find_error: Lo que la base de datos fake lanza en una lectura, para las dos
-            filas que necesitan una base de datos rota para ser alcanzables.
+        *_error: El error que el cliente fake lanza en la operación asociada.
         rethrow: Si el cliente de test vuelve a lanzar una excepción no controlada.
             Solo la fila ``500`` lo desactiva, porque ahí la excepción no
             controlada es justamente el comportamiento bajo prueba: Starlette envía
@@ -205,6 +208,9 @@ def _running(
 
     Args:
         find_error: Lo que la base de datos fake lanza en una lectura.
+            insert_error: Lo que lanza al insertar.
+            update_error: Lo que lanza al actualizar.
+            delete_error: Lo que lanza al borrar.
         rethrow: Si el cliente de test vuelve a lanzar una excepción no controlada.
 
     Returns:
@@ -284,3 +290,17 @@ def test_every_protected_endpoint_refuses_an_anonymous_caller(
 
     assert response.status_code == 401
     assert response.json()["code"] == "UNAUTHORIZED"
+
+
+def test_503_hides_mongo_error(caplog) -> None:
+    message = "private database detail"
+    request_id = "test-105"
+    headers = {**AUTH, "X-Request-ID": request_id}
+    with _running(find_error=OperationFailure(message)) as client:
+        response = client.get("/texts?checksum=abc", headers=headers)
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == PersistenceError.default_detail
+    assert message not in response.text
+    assert f"operation=find_one request_id={request_id} " \
+        f"error_type=OperationFailure error={message}" in caplog.text

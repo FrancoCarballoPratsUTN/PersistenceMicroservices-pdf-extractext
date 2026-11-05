@@ -10,6 +10,7 @@ un segundo pool de conexiones para la misma base de datos.
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
@@ -23,7 +24,10 @@ from app.errors import (
     DocumentTooLargeError,
     PersistenceError,
 )
+from app.request_context import request_id_context
 from app.use_cases.ports import StoredText, TextChanges
+
+logger = logging.getLogger(__name__)
 
 
 def _utcnow() -> datetime:
@@ -40,6 +44,17 @@ def _to_stored(document: dict[str, Any]) -> StoredText:
         name=document.get("name"),
         metadata=document.get("metadata"),
     )
+
+
+def persistence_error(error: PyMongoError, operation: str) -> PersistenceError:
+    logger.error(
+        "MongoDB operation failed operation=%s request_id=%s error_type=%s error=%s",
+        operation,
+        request_id_context.get() or "-",
+        type(error).__name__,
+        error,
+    )
+    return PersistenceError()
 
 
 class MongoTextRepository:
@@ -75,7 +90,7 @@ class MongoTextRepository:
         except PymongoDocumentTooLarge as error:
             raise DocumentTooLargeError() from error
         except PyMongoError as error:
-            raise PersistenceError(str(error)) from error
+            raise persistence_error(error, "insert") from error
 
     async def get_by_checksum(self, checksum: str) -> StoredText | None:
         """Devuelve el texto almacenado, o None cuando el checksum es desconocido."""
@@ -105,7 +120,7 @@ class MongoTextRepository:
         except PymongoDocumentTooLarge as error:
             raise DocumentTooLargeError() from error
         except PyMongoError as error:
-            raise PersistenceError(str(error)) from error
+            raise persistence_error(error, "update") from error
         return _to_stored(document) if document is not None else None
 
     async def delete(self, checksum: str) -> bool:
@@ -113,7 +128,7 @@ class MongoTextRepository:
         try:
             result = await self._collection.delete_one({"_id": checksum})
         except PyMongoError as error:
-            raise PersistenceError(str(error)) from error
+            raise persistence_error(error, "delete") from error
         return result.deleted_count == 1
 
     async def count(self) -> int:
@@ -127,4 +142,4 @@ class MongoTextRepository:
         try:
             return await self._collection.find_one(query, projection=projection)
         except PyMongoError as error:
-            raise PersistenceError(str(error)) from error
+            raise persistence_error(error, "find_one") from error

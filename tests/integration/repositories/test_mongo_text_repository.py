@@ -130,17 +130,25 @@ async def test_update_maps_document_too_large_to_domain_error() -> None:
 
 
 async def test_update_maps_pymongo_error_to_persistence_error() -> None:
-    repo = await _make_repo(update_error=OperationFailure("update failed"))
+    driver_error = OperationFailure("update failed")
+    repo = await _make_repo(update_error=driver_error)
 
-    with pytest.raises(PersistenceError):
+    with pytest.raises(PersistenceError) as raised:
         await repo.update("abc123", TextChanges(name="otro.pdf"))
+
+    assert raised.value.detail == PersistenceError.default_detail
+    assert raised.value.__cause__ is driver_error
 
 
 async def test_delete_maps_pymongo_error_to_persistence_error() -> None:
-    repo = await _make_repo(delete_error=OperationFailure("delete failed"))
+    driver_error = OperationFailure("delete failed")
+    repo = await _make_repo(delete_error=driver_error)
 
-    with pytest.raises(PersistenceError):
+    with pytest.raises(PersistenceError) as raised:
         await repo.delete("abc123")
+
+    assert raised.value.detail == PersistenceError.default_detail
+    assert raised.value.__cause__ is driver_error
 
 
 async def test_delete_reports_whether_a_text_was_removed() -> None:
@@ -159,17 +167,25 @@ async def test_a_document_too_large_is_reported_as_such() -> None:
 
 
 async def test_an_unreachable_server_becomes_a_persistence_error() -> None:
-    repo = await _make_repo(insert_error=ServerSelectionTimeoutError("no host"))
+    driver_error = ServerSelectionTimeoutError("no host")
+    repo = await _make_repo(insert_error=driver_error)
 
-    with pytest.raises(PersistenceError):
+    with pytest.raises(PersistenceError) as raised:
         await repo.insert(_stored("abc123"))
+
+    assert raised.value.detail == PersistenceError.default_detail
+    assert raised.value.__cause__ is driver_error
 
 
 async def test_a_failing_read_becomes_a_persistence_error() -> None:
-    repo = await _make_repo(find_error=OperationFailure("read failed"))
+    driver_error = OperationFailure("read failed")
+    repo = await _make_repo(find_error=driver_error)
 
-    with pytest.raises(PersistenceError):
+    with pytest.raises(PersistenceError) as raised:
         await repo.get_by_checksum("abc123")
+
+    assert raised.value.detail == PersistenceError.default_detail
+    assert raised.value.__cause__ is driver_error
 
 
 async def test_updating_without_metadata_leaves_the_metadata_alone() -> None:

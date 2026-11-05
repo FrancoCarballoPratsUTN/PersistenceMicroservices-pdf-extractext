@@ -33,6 +33,7 @@ from starlette.types import ASGIApp
 from app.api.problem import instance_of, problem_response
 from app.config import Settings
 from app.errors import PayloadTooLargeError, UnsupportedMediaTypeError
+from app.request_context import request_id_context
 
 logger = logging.getLogger(__name__)
 
@@ -137,10 +138,13 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         request_id = request.headers.get(REQUEST_ID_HEADER) or uuid4().hex
         request.state.request_id = request_id
         logger.info("request_id=%s %s %s", request_id, request.method, request.url.path)
-
-        response = await call_next(request)
-        response.headers[REQUEST_ID_HEADER] = request_id
-        return response
+        token = request_id_context.set(request_id)
+        try:
+            response = await call_next(request)
+            response.headers[REQUEST_ID_HEADER] = request_id
+            return response
+        finally:
+            request_id_context.reset(token)
 
 
 class AccessLogMiddleware(BaseHTTPMiddleware):
