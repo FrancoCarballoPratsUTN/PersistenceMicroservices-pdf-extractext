@@ -4,6 +4,10 @@
 > Este archivo es el plan de ejecución.
 >
 > **Estado:** pendiente de aprobación. No se ha escrito código.
+>
+> **v3 (remediación post-code-review):** el release candidate fue **rechazado**.
+> El plan de remediación **R1–R20** está al final de este archivo. La sección v2
+> se conserva como historial de implementación.
 
 ## Overview
 
@@ -403,12 +407,12 @@ el fake cumple el contrato sin herencia.
       y cuenta llamadas para poder afirmar "insert no se invocó"
 
 **Verification:**
-- [ ] `uv run pytest tests/unit/services/test_ports.py`
+- [ ] `uv run pytest tests/unit/use_cases/test_ports.py`
 - [ ] Manual: `python -c "from app.services.ports import TextRepository"`
 
 **Dependencies:** T2
 **Files:** `app/services/ports.py`, `tests/fakes/fake_text_repository.py`,
-`tests/unit/services/test_ports.py`
+`tests/unit/use_cases/test_ports.py`
 **Scope:** Small
 
 ---
@@ -738,3 +742,824 @@ Antes de conectar este servicio, el cliente Go necesita:
 > (`go build ./... && go vet ./... && go test ./...` en verde). `PERSISTENCE_API_TOKEN`
 > quedó como variable obligatoria (sin default) y debe coincidir con el
 > `SERVICE_API_TOKEN` de este servicio.
+
+---
+
+# Plan de Remediación post-Code Review (v3)
+
+> **Origen:** Informe de Code Review del release candidate.
+> **Estado:** pendiente de aprobación. No se ha modificado código de producción.
+> **Objetivo:** cerrar los **15 hallazgos** del informe y las recomendaciones de
+> producción antes de reintentar el despliegue.
+>
+> **Regla de trabajo:** TDD. Cada tarea empieza por un test que reproduce el
+> defecto; el test debe fallar antes del cambio y pasar después. Ninguna tarea se
+> cierra con `skip`, `xfail`, `# type: ignore` nuevo ni cobertura excluida.
+
+## Overview
+
+El servicio ya implementa el CRUD y la suite v2 está en verde, pero el release
+candidate no es apto para producción. La remediación se concentra en cinco
+frentes, en este orden de riesgo:
+
+1. **Contrato de errores:** `DocumentTooLargeError` y los fallos de `update`/
+   `delete` deben responder `413`/`503`, nunca `500`, y el `detail` no debe
+   filtrar mensajes de pymongo.
+2. **Trazabilidad HTTP:** `X-Request-ID` debe existir en **todas** las respuestas,
+   incluido `401`, y estar en el log de acceso y en todos los logs internos.
+3. **Límite real de body:** `Transfer-Encoding: chunked` no puede evadir
+   `MAX_TEXT_BODY_BYTES`.
+4. **Alcance y configuración:** eliminar métricas, cerrar CORS, simplificar la
+   configuración y declarar correctamente las dependencias.
+5. **Calidad restante:** eliminar código muerto, corregir `_to_stored`,
+   `_codes()`, `compare_digest`, Consul y alinear README/SPEC.
+
+El contrato HTTP del orquestador Go **no cambia**. Los únicos cambios visibles
+son correcciones: `413` donde antes había `500`, `503` donde antes había `500`,
+`X-Request-ID` en respuestas que no lo tenían y ausencia de `/metrics`.
+
+## Decisiones de arquitectura para la remediación
+
+- **Errores de dominio siempre `ServiceError`.** `DocumentTooLargeError` hereda
+  de `PayloadTooLargeError`; ningún error de persistencia queda como `Exception`
+  genérica.
+- **Un solo punto de traducción de `PyMongoError`.** Insert, lectura, update y
+  delete comparten la misma política: `DocumentTooLarge → 413`,
+  `DuplicateKey → 409`, resto de `PyMongoError → 503`. El mensaje del driver se
+  registra en el servidor y nunca se devuelve en `detail`.
+- **Request ID en el borde, después de CORS.** El orden externo pasa a ser
+  `CORS → RequestId → AccessLog → Auth → ContentType → BodySize`. Se preserva
+  `401 → 415 → 413 → 400`, pero ahora el `401` también lleva ID.
+- **Contextvar para el request ID.** El middleware lo publica en
+  `request.state` y en un `ContextVar`; un filtro de logging lo inyecta en todas
+  las líneas de `app.*` sin pasarlo a mano por servicios y repositorios.
+- **Sin métricas.** Se eliminan `app/metrics.py` y
+  `app/api/routers/metrics.py`; no se agrega `prometheus_client`. La
+  observabilidad requerida es logging + trazabilidad por `X-Request-ID`.
+- **Configuración con una sola fuente.** `get_settings(environ)` lee únicamente
+  el mapping recibido (o `os.environ` si es `None`), sin fallback silencioso a
+  `os.getenv`; se eliminan alias y wrappers.
+- **Consul no bloquea el event loop.** El registro se ejecuta con
+  `asyncio.to_thread`, con retry/backoff o política fail-fast explícita. El
+  parseo de KV falla con `ConsulConfigurationError`, no con `KeyError`.
+- **CORS cerrado por defecto.** Si no hay clientes navegador, se elimina el
+  middleware. Si los hay, se configuran orígenes explícitos; nunca `["*"]`.
+- **Logs sin PII.** Nunca se registra el token, el texto completo ni metadata.
+  El checksum se registra truncado o hasheado; la política se documenta.
+- **Compatibilidad Go.** Se mantienen los seis campos, RFC 3339 con `Z` y
+  milisegundos, `?checksum=`, `200` en DELETE y `409` uniforme.
+
+## Mapa hallazgo → tarea
+
+| Hallazgo del informe | Tarea(s) |
+|---|---|
+| 3.1 `update`/`delete` no traducen `PyMongoError` | **R2** |
+| 3.2 `DocumentTooLargeError` termina en `500` | **R1** |
+| 3.3 `PersistenceError(str(error))` filtra el driver | **R3** |
+| 3.4 Trazabilidad `X-Request-ID` incompleta | **R4** |
+| 3.5 Límite de body evadible con `chunked` | **R5** |
+| 3.6 Registro en Consul bloqueante/fatal | **R9** |
+| 3.7 Métricas fuera de alcance/dependencia no declarada | **R10** |
+| 3.8 CORS wildcard | **R8** |
+| 3.9 Configuración duplicada y dependencias | **R6, R7** |
+| 3.10 `count()` e índice `updated_at` sin uso | **R11, R12** |
+| 3.11 `_to_stored` inventa timestamps | **R13** |
+| 3.12 `_codes()` solo mira subclases directas | **R14** |
+| 3.13 `compare_digest` con `str` no ASCII | **R15** |
+| 3.14 Parseo de Consul con `KeyError`/status redundante | **R9** |
+| 3.15 README/SPEC desalineados | **R16** |
+| 4.1 Tests de regresión | Cada tarea + **R20** |
+| 4.2 Logging estructurado y sin PII | **R18** |
+| 4.3 Timeouts/pool/retry de Mongo | **R17** |
+| 4.4 Seguridad de borde y secretos | **R8, R9, R18, R19** |
+| 4.5 Readiness y memoria | **R18** |
+| 4.6 CI, cobertura y Docker | **R19** |
+| 4.7 Confirmar ausencia de métricas | **R10** |
+
+## Dependency Graph
+
+```
+R1 ─► R2 ─► R3
+R4 ─► R5
+R6 ─► R8
+R6 ─► R11 ─► R17
+R2 ─► R11
+R2 ─► R13
+R3 ─► R13
+R6 ─► R12
+R7 ─► R10
+R4 ─► R18
+R5 ─► R18
+R17 ─► R18
+R1..R15 ─► R16
+R1..R19 ─► R20
+```
+
+**Paralelización segura:** R7, R14, R15 y R19 no comparten archivos con el resto
+y pueden ejecutarse en paralelo. **Secuencial obligatorio:** R1→R2→R3 (mismo
+repositorio/errores), R4→R5 (mismo middleware), R6→R8 (configuración/CORS),
+R6→R11→R17 (configuración/Mongo), R2→R13 (repositorio) y R16/R20 al final.
+
+## Task List
+
+### Phase 1: Contrato de errores y persistencia
+
+- [ ] **R1: `DocumentTooLargeError` es un `413` y el fake es fiel al dominio.**
+- [ ] **R2: `update`/`delete` traducen todos los `PyMongoError`.**
+- [ ] **R3: `PersistenceError` deja de filtrar el mensaje del driver.**
+
+### Checkpoint 1: errores y persistencia
+
+- [ ] `DocumentTooLarge` de Mongo responde `413`, no `500`.
+- [ ] Fallo de Mongo en `PUT`/`DELETE` responde `503`, no `500`.
+- [ ] Ningún `detail` de `503` contiene texto del driver.
+- [ ] `uv run pytest --cov=app --cov-fail-under=85` pasa.
+- [ ] `uv run ruff check .` y `uv run ruff format --check .` pasan.
+
+### Phase 2: Frontera HTTP y trazabilidad
+
+- [ ] **R4: `X-Request-ID` de extremo a extremo, incluido `401`.**
+- [ ] **R5: límite real de body contra `chunked`.**
+
+### Checkpoint 2: HTTP y trazabilidad
+
+- [ ] Un `401` lleva `X-Request-ID` y el log de acceso incluye ese ID.
+- [ ] Un `X-Request-ID` inválido se reemplaza; uno válido se devuelve igual.
+- [ ] Un body `chunked` mayor al límite responde `413`.
+- [ ] El orden `401 → 415 → 413 → 400` sigue verificado por tests.
+- [ ] `uv run pytest --cov=app --cov-fail-under=85` pasa.
+
+### Phase 3: Configuración, alcance e integraciones
+
+- [ ] **R6: configuración con una sola fuente y sin alias.**
+- [ ] **R7: dependencias declaradas correctamente (`python-dotenv`, sin `pydantic-settings`).**
+- [ ] **R8: CORS cerrado por defecto o eliminado.**
+- [ ] **R9: Consul no bloqueante, con retry y parseo seguro.**
+- [ ] **R10: eliminar métricas y confirmar que `/metrics` es `404`.**
+
+### Checkpoint 3: configuración y alcance
+
+- [ ] `get_settings(environ)` no lee el entorno real cuando recibe un mapping.
+- [ ] `uv sync --frozen` y `uv lock --check` pasan.
+- [ ] `python-dotenv` es dependencia directa; `pydantic-settings` ya no está.
+- [ ] No queda ninguna referencia a `prometheus_client` ni a métricas.
+- [ ] Consul malformado produce `ConsulConfigurationError`, no `KeyError`.
+- [ ] `uv run pytest --cov=app --cov-fail-under=85` pasa.
+
+### Phase 4: Calidad de código y datos
+
+- [ ] **R11: eliminar `count()` del puerto, repositorio, fake y tests.**
+- [ ] **R12: eliminar el índice `updated_at` sin uso.**
+- [ ] **R13: `_to_stored` falla explícitamente ante documentos incompletos.**
+- [ ] **R14: `_codes()` recorre subclases anidadas y deduplica.**
+- [ ] **R15: `compare_digest` sobre bytes para tokens no ASCII.**
+
+### Checkpoint 4: calidad
+
+- [ ] No queda código muerto de `count()` ni el índice `updated_at`.
+- [ ] Un documento corrupto no inventa timestamps ni texto vacío.
+- [ ] El enum de `Problem.code` incluye códigos anidados una sola vez.
+- [ ] Un token no ASCII responde `401`, no `500`.
+- [ ] `uv run pytest --cov=app --cov-fail-under=85` pasa.
+
+### Phase 5: Documentación y hardening de producción
+
+- [ ] **R16: alinear README/SPEC con el código corregido.**
+- [ ] **R17: timeouts, pool y política de retry de Mongo.**
+- [ ] **R18: logging de producción sin PII y readiness con caché.**
+- [ ] **R19: CI, cobertura, Docker, borde y auditoría de dependencias.**
+
+### Checkpoint 5: documentación y hardening
+
+- [ ] README/SPEC no contradicen el código ni entre sí.
+- [ ] `timeoutMS`/`socketTimeoutMS` y `maxPoolSize` están configurados y probados.
+- [ ] Los logs no contienen token, texto completo ni metadata.
+- [ ] `/readyz` no golpea Mongo en cada sonda si la caché está vigente.
+- [ ] CI ejecuta lint, formato y cobertura con umbral.
+
+### Phase 6: Verificación final
+
+- [ ] **R20: matriz manual, regresión completa y checklist de release.**
+
+### Checkpoint Final
+
+- [ ] `uv run pytest --cov=app --cov-fail-under=85` pasa.
+- [ ] `uv run ruff check .` y `uv run ruff format --check .` pasan.
+- [ ] Matriz manual de `curl` completa y documentada.
+- [ ] No existe `/metrics`; no hay dependencia de métricas.
+- [ ] **Revisión humana antes de reintentar el despliegue.**
+
+## Task Detail
+
+### R1: `DocumentTooLargeError` es un `413` y el fake es fiel al dominio
+
+**Descripción:** Convertir `DocumentTooLargeError` en subclase de
+`PayloadTooLargeError` para que el handler de `ServiceError` responda `413`.
+Alinear `FakeTextRepository` para que un duplicado lance
+`ChecksumAlreadyExistsError`, igual que el repositorio real, y retirar
+`DuplicateKeyError` del vocabulario de producción si no tiene otro uso.
+
+**Acceptance criteria:**
+- [ ] `DocumentTooLargeError.status == 413` y `code == "PAYLOAD_TOO_LARGE"`.
+- [ ] Un `DocumentTooLarge` del repositorio produce `413` con
+      `application/problem+json`, no `500`.
+- [ ] El fake de duplicado lanza `ChecksumAlreadyExistsError`; no hay
+      `DuplicateKeyError` usado solo por tests.
+- [ ] Los tests existentes de repositorio, puerto y matriz de errores pasan.
+
+**Verification:**
+- [ ] `uv run pytest tests/integration/repositories/test_mongo_text_repository.py`
+- [ ] `uv run pytest tests/integration/api/test_error_matrix.py`
+- [ ] `uv run pytest tests/unit/use_cases/test_ports.py`
+- [ ] Test nuevo: `POST`/`PUT` con `DocumentTooLarge` inyectado ⇒ `413`.
+
+**Dependencies:** None
+**Files likely touched:** `app/errors.py`,
+`app/repositories/mongodb_text_repository.py`,
+`tests/fakes/fake_text_repository.py`,
+`tests/integration/repositories/test_mongo_text_repository.py`,
+`tests/integration/api/test_error_matrix.py`
+**Estimated scope:** Small
+
+---
+
+### R2: `update`/`delete` traducen todos los `PyMongoError`
+
+**Descripción:** Envolver `find_one_and_update` y `delete_one` con la misma
+política de traducción que `insert`/`_find_one`. `update` debe capturar
+`DocumentTooLarge` antes que `PyMongoError`; `delete` solo necesita
+`PyMongoError`. Usar `ReturnDocument.AFTER` en lugar del booleano `True`.
+
+**Acceptance criteria:**
+- [ ] `update` traduce `DocumentTooLarge → DocumentTooLargeError` y
+      `PyMongoError → PersistenceError`.
+- [ ] `delete` traduce `PyMongoError → PersistenceError`.
+- [ ] `PUT`/`DELETE` con Mongo caído responden `503`, no `500`.
+- [ ] `return_document=ReturnDocument.AFTER` reemplaza a `True`.
+- [ ] Tests de repositorio y de API cubren ambos verbos.
+
+**Verification:**
+- [ ] `uv run pytest tests/integration/repositories/test_mongo_text_repository.py -k "update or delete"`
+- [ ] `uv run pytest tests/integration/api/test_error_matrix.py -k "503"`
+- [ ] Test nuevo: `PUT` y `DELETE` con `ServerSelectionTimeoutError` ⇒ `503`.
+
+**Dependencies:** R1
+**Files likely touched:** `app/repositories/mongodb_text_repository.py`,
+`tests/integration/repositories/test_mongo_text_repository.py`,
+`tests/integration/api/test_error_matrix.py`
+**Estimated scope:** Small
+
+---
+
+### R3: `PersistenceError` deja de filtrar el mensaje del driver
+
+**Descripción:** Centralizar la traducción de `PyMongoError` en un helper que
+registre el tipo/mensaje real en el servidor y devuelva `PersistenceError()` con
+su `detail` por defecto. Eliminar todos los `PersistenceError(str(error))`.
+
+**Acceptance criteria:**
+- [ ] No queda ninguna llamada `PersistenceError(str(error))`.
+- [ ] El `detail` de `503` es el valor por defecto y no contiene host, topología,
+      query ni mensaje de pymongo.
+- [ ] El error real se registra con operación y `request_id` (vía filtro de R4).
+- [ ] Un test verifica que el body de `503` no contiene el texto del driver.
+
+**Verification:**
+- [ ] `uv run pytest tests/integration/api/test_error_matrix.py -k "persistence"`
+- [ ] `uv run pytest tests/integration/repositories/test_mongo_text_repository.py`
+- [ ] `rg "PersistenceError\\(str\\(" app tests` ⇒ sin resultados.
+
+**Dependencies:** R1, R2
+**Files likely touched:** `app/repositories/mongodb_text_repository.py`,
+`tests/integration/api/test_error_matrix.py`,
+`tests/integration/repositories/test_mongo_text_repository.py`
+**Estimated scope:** XS
+
+---
+
+### R4: `X-Request-ID` de extremo a extremo, incluido `401`
+
+**Descripción:** Reordenar el stack para que `RequestIdMiddleware` sea más
+externo que `AccessLogMiddleware` y `BearerAuthMiddleware`, manteniendo CORS
+como el más externo. Publicar el ID en `request.state` y en un `ContextVar`,
+inyectarlo en el formato de logging y eliminar la línea duplicada de
+`RequestIdMiddleware`. Validar el header entrante con charset y longitud
+acotados.
+
+**Acceptance criteria:**
+- [ ] Orden efectivo: `CORS → RequestId → AccessLog → BearerAuth →
+      ContentType → BodySize`; se preserva `401 → 415 → 413 → 400`.
+- [ ] `401`, `415`, `413`, `400`, `409`, `503` y `500` llevan `X-Request-ID`.
+- [ ] Un ID válido se devuelve igual; uno inválido o demasiado largo se
+      reemplaza por uno generado.
+- [ ] El log de acceso incluye `request_id` y no hay dos líneas de request-id
+      por petición.
+- [ ] Los logs de auth, exception handlers, servicio y repositorio incluyen
+      `request_id` automáticamente.
+- [ ] Tests: `401` con header, acceso con ID, header inválido saneado.
+
+**Verification:**
+- [ ] `uv run pytest tests/unit/api/test_middleware.py -k "request_id or access_log"`
+- [ ] `uv run pytest tests/unit/api/test_auth.py -k "request_id"`
+- [ ] Manual: `curl -i localhost:8082/texts?checksum=x` sin token ⇒ `401` +
+      `x-request-id`.
+- [ ] Manual: `curl -i -H "X-Request-ID: test-123" ...` ⇒ eco `test-123`.
+
+**Dependencies:** None
+**Files likely touched:** `app/main.py`, `app/api/middleware.py`,
+`app/logging_setup.py`, `tests/unit/api/test_middleware.py`,
+`tests/unit/api/test_auth.py`
+**Estimated scope:** Medium
+
+---
+
+### R5: Límite real de body contra `chunked`
+
+**Descripción:** Reemplazar el middleware que solo lee `Content-Length` por uno
+ASGI que cuente bytes reales, rechace `413` al superar el límite y repita el body
+al downstream. Mantener el rechazo temprano por `Content-Length` cuando exista.
+
+**Acceptance criteria:**
+- [ ] Un body `chunked` mayor a `MAX_TEXT_BODY_BYTES` responde `413` antes de
+      llegar al router.
+- [ ] Un body declarado con `Content-Length` mayor al límite se rechaza sin
+      leerlo.
+- [ ] Un body válido dentro del límite sigue llegando intacto a `request.json()`.
+- [ ] El test usa un ASGI `receive` con `more_body=True`; no depende de `httpx`
+      para simular chunked.
+- [ ] No se rompe el orden `401 → 415 → 413 → 400`.
+
+**Verification:**
+- [ ] `uv run pytest tests/unit/api/test_middleware.py -k "body_size or chunked"`
+- [ ] Manual: `curl -i -X POST ... -H "Transfer-Encoding: chunked" --data-binary @archivo-grande` ⇒ `413`.
+
+**Dependencies:** R4
+**Files likely touched:** `app/api/middleware.py`,
+`tests/unit/api/test_middleware.py`
+**Estimated scope:** Medium
+
+---
+
+### R6: Configuración con una sola fuente y sin alias
+
+**Descripción:** Simplificar `get_settings` para que lea solo el mapping
+recibido (o `os.environ`), sin mezclar `os.getenv`. Eliminar las propiedades
+alias `mongodb_*` y `get_settings_from_values`; actualizar `mongodb.py` y
+`main.py` para usar `mongo_*` y `get_settings(values)`.
+
+**Acceptance criteria:**
+- [ ] `get_settings(environ)` no consulta el entorno real si recibe un mapping.
+- [ ] Los defaults y la obligatoriedad de `PERSISTENCE_API_TOKEN` se mantienen.
+- [ ] No existen `mongodb_uri`, `mongodb_database`,
+      `mongodb_texts_collection` ni `mongodb_timeout_ms`.
+- [ ] `get_settings_from_values` fue eliminado y `main.py` usa `get_settings`.
+- [ ] Tests: mapping inyectado sin token ⇒ `ConfigurationError` aunque el
+      proceso tenga token; defaults correctos.
+
+**Verification:**
+- [ ] `uv run pytest tests/unit/test_config.py`
+- [ ] `rg "mongodb_|get_settings_from_values" app tests` ⇒ sin resultados.
+- [ ] `uv run pytest tests/unit/test_mongodb_lifecycle.py`
+
+**Dependencies:** None
+**Files likely touched:** `app/config.py`, `app/repositories/mongodb.py`,
+`app/main.py`, `tests/unit/test_config.py`
+**Estimated scope:** Medium
+
+---
+
+### R7: Dependencias declaradas correctamente
+
+**Descripción:** Declarar `python-dotenv` como dependencia directa (se importa
+en `app/config.py`), eliminar `pydantic-settings` (no se usa) y confirmar que
+`prometheus_client` no se agrega. Regenerar `uv.lock`.
+
+**Acceptance criteria:**
+- [ ] `pyproject.toml` incluye `python-dotenv` y ya no incluye
+      `pydantic-settings`.
+- [ ] `uv lock`/`uv sync --frozen` pasan y `uv.lock` queda actualizado.
+- [ ] `uv tree` muestra `python-dotenv` como dependencia directa.
+- [ ] No hay `prometheus_client` en `pyproject.toml` ni en `uv.lock`.
+
+**Verification:**
+- [ ] `uv lock --check`
+- [ ] `uv sync --frozen`
+- [ ] `uv tree | rg "python-dotenv|pydantic-settings|prometheus"`
+
+**Dependencies:** None
+**Files likely touched:** `pyproject.toml`, `uv.lock`
+**Estimated scope:** XS
+
+---
+
+### R8: CORS cerrado por defecto o eliminado
+
+**Descripción:** Eliminar `allow_origins=["*"]`. Si no hay clientes navegador,
+quitar `CORSMiddleware`; si los hay, agregar `CORS_ALLOW_ORIGINS` como lista
+explícita y configurar el middleware con esa lista. Mantener `X-Request-ID` en
+`allow_headers` cuando CORS exista.
+
+**Acceptance criteria:**
+- [ ] No queda `allow_origins=["*"]` en el código.
+- [ ] Por defecto no se permite ningún origen cruzado.
+- [ ] Si se configura un origen permitido, el preflight responde solo para ese
+      origen; un origen no permitido no recibe `Access-Control-Allow-Origin`.
+- [ ] Tests de CORS actualizados o eliminados si el middleware se retira.
+- [ ] README documenta la decisión y la variable, si aplica.
+
+**Verification:**
+- [ ] `uv run pytest tests/unit/api/test_middleware.py -k "cors or preflight"`
+- [ ] `uv run pytest tests/unit/test_config.py -k "cors"`
+- [ ] Manual: `curl -i -H "Origin: https://evil.example" ...` ⇒ sin
+      `access-control-allow-origin: *`.
+
+**Dependencies:** R6
+**Files likely touched:** `app/main.py`, `app/config.py`,
+`tests/unit/test_config.py`, `tests/unit/api/test_middleware.py`
+**Estimated scope:** Small
+
+---
+
+### R9: Consul no bloqueante, con retry y parseo seguro
+
+**Descripción:** Ejecutar `register_service` con `asyncio.to_thread` para no
+bloquear el event loop. Definir política de fallo: retry/backoff acotado o
+fail-fast explícito documentado. Endurecer `load_prefix` para capturar
+`KeyError`/`TypeError`/`ValueError`/`UnicodeDecodeError` y lanzar
+`ConsulConfigurationError`. Eliminar la comprobación redundante de
+`response.status`.
+
+**Acceptance criteria:**
+- [ ] El registro no bloquea el event loop; se ejecuta en un hilo.
+- [ ] Un fallo transitorio tiene retry/backoff o un fail-fast documentado y
+      testeado.
+- [ ] Una respuesta KV malformada produce `ConsulConfigurationError`, no
+      `KeyError`/`TypeError`.
+- [ ] Un prefijo vacío o sin claves tiene una política explícita (fallar o
+      documentar el fallback).
+- [ ] Se eliminó `if response.status // 100 != 2`.
+- [ ] Tests de respuesta malformada, retry y no bloqueo.
+
+**Verification:**
+- [ ] `uv run pytest tests/unit/test_consul.py`
+- [ ] Test nuevo: `load_prefix` con `[{}]` ⇒ `ConsulConfigurationError`.
+- [ ] Test nuevo: `register_service` que falla una vez y luego responde ⇒ retry
+      (si se elige esa política).
+
+**Dependencies:** R4
+**Files likely touched:** `app/main.py`, `app/consul.py`,
+`app/consul_agent.py`, `tests/unit/test_consul.py`
+**Estimated scope:** Medium
+
+---
+
+### R10: Eliminar métricas y confirmar `/metrics` `404`
+
+**Descripción:** Borrar `app/metrics.py` y `app/api/routers/metrics.py`, no
+montar `/metrics` y no agregar `prometheus_client`. Confirmar con test que la
+ruta responde `404` y que no queda ninguna referencia.
+
+**Acceptance criteria:**
+- [ ] Los dos archivos de métricas fueron eliminados.
+- [ ] No hay imports de `prometheus_client` ni de `app.metrics`.
+- [ ] `/metrics` responde `404` (o `401` si se decide mantener una ruta
+      inexistente protegida; el requisito es que no exista endpoint de métricas).
+- [ ] `pyproject.toml`/`uv.lock` no contienen `prometheus_client`.
+- [ ] README/SPEC no prometen métricas.
+
+**Verification:**
+- [ ] `rg "metrics|prometheus" app pyproject.toml uv.lock README.md SPEC.md`
+- [ ] `uv run pytest tests/integration/api/test_error_matrix.py -k "metrics"`
+- [ ] Manual: `curl -i localhost:8082/metrics` ⇒ `404`.
+
+**Dependencies:** R7
+**Files likely touched:** `app/metrics.py`,
+`app/api/routers/metrics.py`, `pyproject.toml`,
+`tests/integration/api/test_error_matrix.py`
+**Estimated scope:** XS
+
+---
+
+### R11: Eliminar `count()` del puerto, repositorio, fake y tests
+
+**Descripción:** Quitar `count()` de `TextRepository`, `MongoTextRepository`,
+`FakeTextRepository` y tests. Ningún endpoint ni servicio lo usa. Resolver el
+drift de SPEC: si se necesita un probe de repositorio, implementar `ping` con
+propósito; si no, eliminar la fila.
+
+**Acceptance criteria:**
+- [ ] No existe `count()` en `app/` ni en `tests/fakes/`.
+- [ ] Los tests que contaban llamadas ya no lo referencian.
+- [ ] SPEC y código coinciden (`ping` o eliminación de la fila).
+- [ ] La suite sigue verde.
+
+**Verification:**
+- [ ] `rg "count\\(" app tests` ⇒ sin resultados en el puerto/repositorio.
+- [ ] `uv run pytest tests/unit/use_cases/test_ports.py tests/integration/repositories/test_mongo_text_repository.py`
+
+**Dependencies:** R2, R6
+**Files likely touched:** `app/use_cases/ports.py`,
+`app/repositories/mongodb_text_repository.py`,
+`tests/fakes/fake_text_repository.py`,
+`tests/unit/use_cases/test_ports.py`,
+`tests/integration/repositories/test_mongo_text_repository.py`
+**Estimated scope:** Small
+
+---
+
+### R12: Eliminar el índice `updated_at` sin uso
+
+**Descripción:** Quitar `create_index("updated_at")` de `MongoConnection.start`.
+Ninguna consulta filtra ni ordena por `updated_at`; todas las búsquedas son por
+`_id`. Si se prevé un listado futuro, el índice se agregará junto con la consulta
+que lo use.
+
+**Acceptance criteria:**
+- [ ] `MongoConnection.start` no crea el índice `updated_at`.
+- [ ] No se pierde ninguna garantía de unicidad: `_id` sigue siendo la clave.
+- [ ] Tests de lifecycle actualizados y verdes.
+- [ ] `/readyz` sigue funcionando con Mongo arriba/abajo.
+
+**Verification:**
+- [ ] `rg "create_index|updated_at" app/repositories/mongodb.py`
+- [ ] `uv run pytest tests/unit/test_mongodb_lifecycle.py`
+
+**Dependencies:** R6
+**Files likely touched:** `app/repositories/mongodb.py`,
+`tests/unit/test_mongodb_lifecycle.py`
+**Estimated scope:** XS
+
+---
+
+### R13: `_to_stored` falla explícitamente ante documentos incompletos
+
+**Descripción:** Dejar de inventar `created_at`/`updated_at` con `now()` y
+`text` vacío. Si falta un campo obligatorio, registrar el problema y lanzar un
+error de dominio explícito; si se quiere distinguir corrupción de
+indisponibilidad, crear `CorruptDocumentError(ServiceError)` con `500`.
+
+**Acceptance criteria:**
+- [ ] `_to_stored` no usa `datetime.now()` ni `or ""` para campos obligatorios.
+- [ ] Un documento sin `text`/`created_at`/`updated_at` produce un error
+      explícito y logueado, no una respuesta con datos falsos.
+- [ ] Un documento válido sigue mapeando los seis campos correctamente.
+- [ ] Test de documento incompleto y test de documento válido.
+
+**Verification:**
+- [ ] `uv run pytest tests/integration/repositories/test_mongo_text_repository.py -k "stored or corrupt"`
+- [ ] `uv run pytest tests/integration/api/test_get_text.py`
+
+**Dependencies:** R2, R3
+**Files likely touched:** `app/repositories/mongodb_text_repository.py`,
+`tests/integration/repositories/test_mongo_text_repository.py`
+**Estimated scope:** XS
+
+---
+
+### R14: `_codes()` recorre subclases anidadas y deduplica
+
+**Descripción:** Reemplazar `ServiceError.__subclasses__()` por un recorrido
+recursivo que incluya subclases anidadas, con `set` para evitar duplicados. El
+enum de `Problem.code` debe seguir siendo estable y completo.
+
+**Acceptance criteria:**
+- [ ] `_codes()` incluye `PAYLOAD_TOO_LARGE` una sola vez aunque
+      `DocumentTooLargeError` sea subclase de `PayloadTooLargeError`.
+- [ ] Un error nuevo anidado aparece en el enum sin tocar `schemas.py`.
+- [ ] `test_openapi.py` sigue comparando el enum contra las clases reales.
+- [ ] No cambia el orden alfabético del enum.
+
+**Verification:**
+- [ ] `uv run pytest tests/integration/api/test_openapi.py`
+- [ ] `uv run pytest tests/unit/test_errors.py`
+
+**Dependencies:** R1
+**Files likely touched:** `app/api/schemas.py`,
+`tests/integration/api/test_openapi.py`
+**Estimated scope:** XS
+
+---
+
+### R15: `compare_digest` sobre bytes para tokens no ASCII
+
+**Descripción:** Codificar ambos valores a UTF-8 antes de
+`secrets.compare_digest` para que un token no ASCII produzca `401` en lugar de
+`TypeError`/`500`, manteniendo la comparación en tiempo constante.
+
+**Acceptance criteria:**
+- [ ] Un token configurado no ASCII y presentado correctamente no lanza
+      `TypeError`.
+- [ ] Un token incorrecto sigue respondiendo `401` uniforme.
+- [ ] La comparación sigue siendo `compare_digest` sobre bytes.
+- [ ] Tests con token ASCII y no ASCII.
+
+**Verification:**
+- [ ] `uv run pytest tests/unit/api/test_auth.py -k "token or unicode"`
+- [ ] Manual: configurar un token con `ñ`/emoji y probar `curl`.
+
+**Dependencies:** None
+**Files likely touched:** `app/api/auth.py`, `tests/unit/api/test_auth.py`
+**Estimated scope:** XS
+
+---
+
+### R16: Alinear README/SPEC con el código corregido
+
+**Descripción:** Actualizar la documentación después de R1–R15. Corregir el
+nombre canónico del token, la afirmación sobre `X-Request-ID` en el log de
+acceso, el ejemplo de milisegundos, la ausencia de métricas, CORS, variables de
+configuración y el drift `ping`/`count`. Documentar la política de Consul y de
+retry de Mongo.
+
+**Acceptance criteria:**
+- [ ] README documenta `PERSISTENCE_API_TOKEN` como canónico y
+      `SERVICE_API_TOKEN` como alias.
+- [ ] README dice la verdad sobre `X-Request-ID` y el log de acceso.
+- [ ] El ejemplo de fecha usa milisegundos (`...789Z`), no microsegundos.
+- [ ] README/SPEC confirman que no hay `/metrics`.
+- [ ] SPEC y código coinciden en `ping`/`count`, `413` por documento y `503` en
+      `PUT`/`DELETE`.
+- [ ] No hay contradicciones entre README y SPEC.
+
+**Verification:**
+- [ ] Revisión manual cruzada README ↔ SPEC ↔ `app/`.
+- [ ] `rg "metrics|SERVICE_API_TOKEN|X-Request-ID|count\\(|ping" README.md SPEC.md`
+- [ ] `uv run ruff check .` no se ve afectado por docs (`*.md` excluido).
+
+**Dependencies:** R1–R15
+**Files likely touched:** `README.md`, `SPEC.md`
+**Estimated scope:** Small
+
+---
+
+### R17: Timeouts, pool y política de retry de Mongo
+
+**Descripción:** Agregar configuración para `timeoutMS`/`socketTimeoutMS` y
+`maxPoolSize`, pasarla al `AsyncMongoClient` y documentarla en `.env.example`.
+Definir una política explícita de retry para errores transitorios: solo lecturas
+idempotentes o ninguna, para no duplicar escrituras.
+
+**Acceptance criteria:**
+- [ ] `Settings` expone `mongo_socket_timeout_ms` y `mongo_max_pool_size` (o
+      nombres equivalentes) con defaults seguros.
+- [ ] `AsyncMongoClient` recibe `timeoutMS`/`socketTimeoutMS` y `maxPoolSize`.
+- [ ] `.env.example` y README documentan las variables.
+- [ ] Tests verifican que los valores llegan al cliente.
+- [ ] La política de retry está escrita y no reintenta escrituras no
+      idempotentes sin control.
+
+**Verification:**
+- [ ] `uv run pytest tests/unit/test_config.py tests/unit/test_mongodb_lifecycle.py`
+- [ ] `rg "timeoutMS|socketTimeoutMS|maxPoolSize" app .env.example README.md`
+
+**Dependencies:** R6, R11
+**Files likely touched:** `app/config.py`, `app/repositories/mongodb.py`,
+`.env.example`, `tests/unit/test_config.py`, `README.md`
+**Estimated scope:** Medium
+
+---
+
+### R18: Logging de producción sin PII y readiness con caché
+
+**Descripción:** Completar la observabilidad: logs estructurados/consistentes
+con `request_id`, eventos de negocio seguros en create/update/delete y errores
+con contexto. Nunca registrar token, texto completo ni metadata; el checksum se
+trunca o hashea. Añadir caché con TTL corto al `ping` de `/readyz` para no
+golpear Mongo en cada sonda.
+
+**Acceptance criteria:**
+- [ ] Create/update/delete emiten un log de negocio con `request_id`, checksum
+      seguro y resultado, sin texto ni metadata.
+- [ ] Los errores de persistencia se loguean con operación y `request_id`.
+- [ ] No hay token, texto completo ni metadata en ningún log.
+- [ ] `/readyz` cachea el resultado por un TTL configurable (default 1 s).
+- [ ] Tests de logs y de caché de readiness.
+
+**Verification:**
+- [ ] `uv run pytest tests/unit/services/test_text_service.py -k "log"`
+- [ ] `uv run pytest tests/unit/test_mongodb_lifecycle.py -k "readyz"`
+- [ ] `uv run pytest tests/unit/test_logging_setup.py`
+- [ ] `rg "logger.*text|logger.*metadata|logger.*token" app` ⇒ sin resultados.
+
+**Dependencies:** R4, R5, R17
+**Files likely touched:** `app/logging_setup.py`, `app/services/text_service.py`,
+`app/repositories/mongodb_text_repository.py`, `app/api/routers/health.py`,
+tests de servicio/health
+**Estimated scope:** Medium
+
+---
+
+### R19: CI, cobertura, Docker, borde y auditoría de dependencias
+
+**Descripción:** Asegurar que el gate de calidad se ejecuta siempre: lint,
+formato, tests con cobertura ≥ 85 y `uv sync --frozen`. Endurecer el contenedor
+con `read_only`, `cap_drop: [ALL]`, `security_opt: no-new-privileges` y límites
+de memoria si son compatibles. Confirmar en el borde (Traefik) que hay TLS y
+rate limiting; si no, registrar la deuda con owner y criterio de aceptación.
+Documentar que la rotación de token queda fuera de esta release.
+
+**Acceptance criteria:**
+- [ ] CI ejecuta `uv run ruff check .`, `uv run ruff format --check .` y
+      `uv run pytest --cov=app --cov-fail-under=85`.
+- [ ] `uv sync --frozen` y `uv lock --check` pasan en CI.
+- [ ] No hay dependencias no declaradas ni `prometheus_client`.
+- [ ] Dockerfile/compose mantienen non-root, healthcheck y graceful shutdown;
+      se agregan las opciones de hardening compatibles.
+- [ ] TLS y rate limiting están verificados en Traefik o registrados como deuda
+      con owner, umbral y fecha.
+- [ ] La rotación de token está documentada como fuera de alcance, con su
+      mitigación operativa.
+- [ ] `docker compose config` valida.
+
+**Verification:**
+- [ ] `uv run pytest --cov=app --cov-fail-under=85`
+- [ ] `uv run ruff check . && uv run ruff format --check .`
+- [ ] `docker compose config`
+- [ ] `uv tree` y `rg "prometheus" pyproject.toml uv.lock`
+- [ ] Revisión de la configuración de Traefik: TLS + rate limit.
+
+**Dependencies:** None
+**Files likely touched:** `pyproject.toml`, `Dockerfile`, `docker-compose.yml`,
+workflow de CI o configuración de Traefik si existe
+**Estimated scope:** Medium
+
+---
+
+### R20: Matriz manual, regresión completa y checklist de release
+
+**Descripción:** Ejecutar la verificación final end-to-end y actualizar
+`tasks/todo.md`. Confirmar que cada hallazgo tiene su test de regresión y que el
+contrato del orquestador Go no cambió.
+
+**Acceptance criteria:**
+- [ ] Suite completa, lint, formato y cobertura pasan.
+- [ ] Matriz manual de `curl` completa: `401` con ID, `415`, `413` chunked,
+      `409`, `404`, `503` en `PUT`/`DELETE`, `404` en `/metrics`.
+- [ ] `X-Request-ID` válido se eco; inválido se reemplaza; access log lo incluye.
+- [ ] CORS no devuelve `*`.
+- [ ] README/SPEC revisados; no hay contradicciones.
+- [ ] `tasks/todo.md` actualizado y **revisión humana** registrada.
+
+**Verification:**
+- [ ] `uv run pytest --cov=app --cov-fail-under=85`
+- [ ] `uv run ruff check . && uv run ruff format --check .`
+- [ ] `uv sync --frozen && uv lock --check`
+- [ ] `curl -i localhost:8082/texts?checksum=x` ⇒ `401` + `x-request-id`
+- [ ] `curl -i -H "X-Request-ID: test-123" ...` ⇒ eco
+- [ ] `curl -i -X POST ... -H "Transfer-Encoding: chunked" ...` ⇒ `413`
+- [ ] `curl -i -X PUT ...` con Mongo caído ⇒ `503`
+- [ ] `curl -i -X DELETE ...` con Mongo caído ⇒ `503`
+- [ ] `curl -i localhost:8082/metrics` ⇒ `404`
+- [ ] `curl -i -H "Origin: https://evil.example" ...` ⇒ sin CORS `*`
+
+**Dependencies:** R1–R19
+**Files likely touched:** `tasks/plan.md`, `tasks/todo.md`
+**Estimated scope:** Small
+
+## Risks and Mitigations
+
+| Riesgo | Impacto | Mitigación | Tarea |
+|---|---|---|---|
+| Reordenar middleware rompe `401 → 415 → 413 → 400` | Alto | Test de orden existente + test nuevo de `401` con ID | R4 |
+| Bufferizar el body para medir `chunked` aumenta memoria | Medio | Límite duro; test de carga; alternativa de rechazo en Traefik | R5 |
+| Retry de Consul oculta una caída prolongada | Medio | Política explícita, logs y timeout acotado | R9 |
+| Retry de Mongo duplica escrituras | Alto | No reintentar escrituras no idempotentes; solo lecturas | R17 |
+| Eliminar CORS rompe un cliente navegador no inventariado | Medio | Confirmar con el humano; configurar orígenes explícitos si existe | R8 |
+| Cambios de config rompen alias `MONGODB_*`/`SERVICE_API_TOKEN` | Medio | Tests de alias y defaults; documentar migración | R6, R16 |
+| Eliminar `count()`/índice rompe tests o expectativas de SPEC | Bajo | Actualizar tests y SPEC en la misma tarea | R11, R12, R16 |
+| El fake sigue divergiendo del repositorio real | Medio | Hacer que lance `ChecksumAlreadyExistsError` y cubrir con tests de contrato | R1 |
+| La cobertura cae al eliminar métricas | Bajo | Recalcular umbral sobre código real; no excluir código | R10, R19 |
+| Logs de negocio filtran texto o metadata | Alto | Revisión de campos permitidos + test de logs | R18 |
+
+## Open Questions
+
+1. **Consul:** ¿el fallo de registro debe impedir el arranque (fail-fast) o el
+   servicio debe arrancar sin registro y reintentar en background? El plan deja
+   ambas opciones, pero hay que elegir una antes de R9.
+2. **CORS:** ¿existe algún cliente navegador real? Si no, R8 elimina el
+   middleware; si sí, hay que definir la lista de orígenes.
+3. **`DocumentTooLargeError`:** el plan elige heredar de
+   `PayloadTooLargeError`. ¿Se prefiere eliminarlo y lanzar
+   `PayloadTooLargeError` directamente desde el repositorio?
+4. **`count()`/`ping`:** el plan elimina `count()` porque no se usa. ¿Se quiere
+   un `ping` real en el puerto para futuros probes?
+5. **Readiness:** ¿el TTL de caché de `/readyz` debe ser configurable o alcanza
+   con 1 s fijo?
+6. **Retry de Mongo:** ¿se acepta no reintentar automáticamente ninguna
+   escritura y delegar en el orquestador? El plan recomienda esa opción.
+7. **Secretos:** ¿la rotación de token queda fuera de esta release? El plan
+   asume que sí; solo documenta la recomendación.
+
+## Definition of Done de la remediación
+
+- [ ] Los 15 hallazgos del informe tienen un test de regresión que falla sin el
+      fix y pasa con él.
+- [ ] No queda ningún `500` donde el contrato exige `413`/`503`.
+- [ ] `X-Request-ID` está en todas las respuestas y en todos los logs de `app.*`.
+- [ ] No existe endpoint ni dependencia de métricas.
+- [ ] CORS no usa `*`.
+- [ ] No hay dependencias no declaradas.
+- [ ] `uv run pytest --cov=app --cov-fail-under=85`, `ruff check` y
+      `ruff format --check` pasan.
+- [ ] README/SPEC coinciden con el código.
+- [ ] Revisión humana aprobada antes de reintentar el despliegue.
