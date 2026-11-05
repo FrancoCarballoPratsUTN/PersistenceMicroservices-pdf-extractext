@@ -293,6 +293,13 @@ def test_every_protected_endpoint_refuses_an_anonymous_caller(
     assert response.json()["code"] == "UNAUTHORIZED"
 
 
+def test_metrics_endpoint_is_not_available() -> None:
+    with _running() as client:
+        response = client.get("/metrics", headers=AUTH)
+
+    assert response.status_code == 404
+
+
 def test_503_hides_mongo_error(caplog) -> None:
     message = "private database detail"
     request_id = "test-105"

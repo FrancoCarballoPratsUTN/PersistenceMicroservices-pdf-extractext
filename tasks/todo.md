@@ -426,11 +426,11 @@ Este servicio **cambia** el contrato. Antes de conectarlo:
 **Deps:** R4 · **Files:** `app/main.py`, `app/consul.py`, `app/consul_agent.py`, `tests/unit/test_consul.py` · **Scope:** Medium
 
 ### R10: Eliminar métricas y confirmar `/metrics` `404`
-- [ ] Borrar `app/metrics.py` y `app/api/routers/metrics.py`.
-- [ ] Sin imports de `prometheus_client`/`app.metrics`.
-- [ ] `/metrics` ⇒ `404`.
-- [ ] Sin `prometheus_client` en `pyproject.toml`/`uv.lock`.
-- [ ] README/SPEC sin promesas de métricas.
+- [x] Borrar `app/metrics.py` y `app/api/routers/metrics.py`.
+- [x] Sin imports de `prometheus_client`/`app.metrics`.
+- [x] `/metrics` ⇒ `404`.
+- [x] Sin `prometheus_client` en `pyproject.toml`/`uv.lock`.
+- [x] README/SPEC sin promesas de métricas.
 
 **AC:** no existe endpoint ni dependencia de métricas.
 **Verify:** `rg "metrics|prometheus" app pyproject.toml uv.lock README.md SPEC.md` · `curl -i localhost:8082/metrics` ⇒ `404`.
