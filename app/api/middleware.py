@@ -29,7 +29,7 @@ from uuid import uuid4
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
-from starlette.types import ASGIApp
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.api.problem import instance_of, problem_response
 from app.config import Settings
@@ -85,8 +85,8 @@ class ContentTypeMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-class BodySizeLimitMiddleware(BaseHTTPMiddleware):
-    """Rechaza un cuerpo mayor que el límite configurado.
+class BodySizeLimitMiddleware:
+    """Cuenta el body recibido y rechaza cuando supera el límite configurado.
 
     Args:
         app: El siguiente manejador de la cadena.
@@ -94,25 +94,52 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
     """
 
     def __init__(self, app: ASGIApp, *, settings: Settings) -> None:
-        super().__init__(app)
+        self._app = app
         self._limit = settings.max_text_body_bytes
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
-        """Rechaza un cuerpo demasiado grande, o pasa la petición.
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self._app(scope, receive, send)
+            return
 
-        Args:
-            request: La petición entrante.
-            call_next: El resto de la cadena.
-
-        Returns:
-            Un ``413`` cuando el cuerpo declarado supera el límite; en caso
-            contrario, lo que responda el resto de la cadena.
-        """
+        request = Request(scope, receive=receive)
         if _declared_length(request) > self._limit:
-            return problem_response(PayloadTooLargeError(), instance_of(request))
-        return await call_next(request)
+            await self._reject(request, receive, send)
+            return
+
+        body = bytearray()
+        replay_messages: list[Message] = []
+        while True:
+            message = await receive()
+            if message["type"] == "http.disconnect":
+                replay_messages.append(
+                    {"type": "http.request", "body": bytes(body), "more_body": True}
+                )
+                replay_messages.append(message)
+                break
+
+            chunk = message.get("body", b"")
+            if len(body) + len(chunk) > self._limit:
+                await self._reject(request, receive, send)
+                return
+
+            body.extend(chunk)
+            if not message.get("more_body", False):
+                replay_messages.append(
+                    {"type": "http.request", "body": bytes(body), "more_body": False}
+                )
+                break
+
+        async def replay_body() -> Message:
+            if replay_messages:
+                return replay_messages.pop(0)
+            return await receive()
+
+        await self._app(scope, replay_body, send)
+
+    async def _reject(self, request: Request, receive: Receive, send: Send) -> None:
+        response = problem_response(PayloadTooLargeError(), instance_of(request))
+        await response(request.scope, receive, send)
 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
