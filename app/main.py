@@ -238,12 +238,13 @@ def create_app(
     # externo, así que este bloque se lee al revés: añadir aquí significa
     # ejecutarse el último. El orden de ejecución resultante es el que pide
     # SPEC 3.3 -- 401 antes que 415, 415 antes que 413, y ambos antes que el 400
-    # que produciría el parseo del body.
+    # que produciría el parseo del body. RequestId rodea el access log y la
+    # autenticación para que también registre los rechazos 401.
     app.add_middleware(BodySizeLimitMiddleware, settings=resolved)
     app.add_middleware(ContentTypeMiddleware)
-    app.add_middleware(RequestIdMiddleware)
     app.add_middleware(BearerAuthMiddleware, settings=resolved)
     app.add_middleware(AccessLogMiddleware)
+    app.add_middleware(RequestIdMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],

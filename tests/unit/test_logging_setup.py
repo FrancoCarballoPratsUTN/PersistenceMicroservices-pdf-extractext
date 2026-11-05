@@ -12,6 +12,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from app.logging_setup import configure_logging
+from app.request_context import request_id_context
 
 
 @contextmanager
@@ -59,3 +60,16 @@ def test_configure_logging_leaves_an_existing_configuration_alone() -> None:
         configure_logging("DEBUG")
 
         assert root.handlers == [existing]
+
+
+def test_logging_filter_adds_the_current_request_id(caplog) -> None:
+    configure_logging("INFO")
+    token = request_id_context.set("logging-123")
+    try:
+        with caplog.at_level(logging.INFO, logger="app.test"):
+            logging.getLogger("app.test").info("request scoped log")
+    finally:
+        request_id_context.reset(token)
+
+    record = next(record for record in caplog.records if record.name == "app.test")
+    assert record.request_id == "logging-123"

@@ -261,6 +261,7 @@ def test_each_row_answers_with_the_status_and_code_it_promises(
 
     assert response.status_code == row.status
     assert response.json()["code"] == row.code
+    assert response.headers["X-Request-ID"]
 
 
 def test_every_failure_is_a_problem_the_orchestrator_can_parse(

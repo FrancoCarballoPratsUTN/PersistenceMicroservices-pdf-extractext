@@ -17,6 +17,7 @@ from app.errors import (
     ResourceNotFoundError,
     ServiceError,
 )
+from app.request_context import request_id_context
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +52,17 @@ async def http_exception_handler(
 
 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    logger.error("Unhandled error while handling %s", request.url.path, exc_info=exc)
-    return problem_response(InternalError(), instance_of(request))
+    request_id = getattr(request.state, "request_id", "-")
+    token = request_id_context.set(request_id)
+    try:
+        logger.error(
+            "Unhandled error while handling %s", request.url.path, exc_info=exc
+        )
+        response = problem_response(InternalError(), instance_of(request))
+        response.headers["X-Request-ID"] = request_id
+        return response
+    finally:
+        request_id_context.reset(token)
 
 
 def register_exception_handlers(app: Starlette) -> None:

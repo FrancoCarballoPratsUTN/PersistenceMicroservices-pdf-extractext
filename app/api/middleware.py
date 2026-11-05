@@ -22,6 +22,7 @@ El límite del cuerpo lee ``Content-Length``, nunca el cuerpo
 from __future__ import annotations
 
 import logging
+import re
 from time import perf_counter
 from uuid import uuid4
 
@@ -41,6 +42,7 @@ REQUEST_ID_HEADER = "X-Request-ID"
 JSON_MEDIA_TYPE = "application/json"
 BODY_METHODS = frozenset({"POST", "PUT"})
 CORS_METHODS = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+REQUEST_ID_PATTERN = re.compile(r"[A-Za-z0-9._-]{1,128}\Z")
 
 
 def _is_json(header: str | None) -> bool:
@@ -135,9 +137,10 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         Returns:
             La respuesta con una cabecera ``X-Request-ID``.
         """
-        request_id = request.headers.get(REQUEST_ID_HEADER) or uuid4().hex
+        request_id = request.headers.get(REQUEST_ID_HEADER, "")
+        if REQUEST_ID_PATTERN.fullmatch(request_id) is None:
+            request_id = uuid4().hex
         request.state.request_id = request_id
-        logger.info("request_id=%s %s %s", request_id, request.method, request.url.path)
         token = request_id_context.set(request_id)
         try:
             response = await call_next(request)

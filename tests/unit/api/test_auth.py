@@ -91,7 +91,11 @@ def build_app(token: str = TOKEN) -> FastAPI:
 
 
 async def send_request(
-    app: FastAPI, method: str, url: str, header: str | None = None
+    app: FastAPI,
+    method: str,
+    url: str,
+    header: str | None = None,
+    request_id: str | None = None,
 ) -> httpx.Response:
     """Envía una petición en proceso a ``app``.
 
@@ -105,7 +109,9 @@ async def send_request(
     Returns:
         La respuesta, una vez ejecutado todo el stack ASGI.
     """
-    headers = {"Authorization": header} if header is not None else None
+    headers = {"Authorization": header} if header is not None else {}
+    if request_id is not None:
+        headers["X-Request-ID"] = request_id
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
         transport=transport, base_url="http://testserver"
@@ -117,6 +123,13 @@ async def test_a_request_without_credentials_is_rejected():
     response = await send_request(build_app(), "GET", "/private")
 
     assert response.status_code == 401
+
+
+async def test_a_401_echoes_the_request_id():
+    response = await send_request(build_app(), "GET", "/private", request_id="auth-123")
+
+    assert response.status_code == 401
+    assert response.headers["X-Request-ID"] == "auth-123"
 
 
 @pytest.mark.parametrize("header", BAD_CREDENTIALS)
@@ -233,6 +246,15 @@ async def test_the_refusal_log_does_not_carry_the_checksum(caplog):
 
     messages = [record.getMessage() for record in caplog.records]
     assert all(CHECKSUM not in message for message in messages)
+
+
+async def test_the_auth_log_has_the_request_id(caplog):
+    request_id = "auth-log-123"
+    with caplog.at_level(logging.WARNING, logger="app.api.auth"):
+        await send_request(build_app(), "GET", "/private", request_id=request_id)
+
+    record = next(record for record in caplog.records if record.name == "app.api.auth")
+    assert record.request_id == request_id
 
 
 async def test_health_answers_without_credentials():
