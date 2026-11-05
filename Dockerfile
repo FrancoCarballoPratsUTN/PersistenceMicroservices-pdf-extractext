@@ -1,6 +1,8 @@
-FROM python:3.14-slim AS builder
+FROM python:3.15-alpine AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
+
+RUN apk add --no-cache build-base
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -8,18 +10,14 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 
-# Dependencies first: this layer stays cached until pyproject.toml or uv.lock
-# change. --no-dev keeps the runtime image free of pytest/ruff.
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --frozen --no-install-project --no-dev
 
-# Application source last: edits here do not invalidate the dependency layer.
 COPY app ./app
 
-# --- Runtime stage -----------------------------------------------------------
-FROM python:3.14-slim AS runtime
+FROM python:3.15-alpine AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -27,7 +25,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN groupadd --system app && useradd --system --gid app --no-create-home app
+RUN addgroup -S app && adduser -S -G app app
 
 COPY --from=builder --chown=app:app /app /app
 
@@ -35,18 +33,8 @@ USER app
 
 EXPOSE 8000
 
-# Docker's default stop signal is already SIGTERM; stating it documents that the
-# graceful path below depends on it. Uvicorn stops accepting, drains the
-# in-flight requests and only then runs the lifespan shutdown and closes Mongo.
 STOPSIGNAL SIGTERM
 
-# /health is open (no token) and does not query MongoDB, so it is a valid
-# liveness probe: it stays up while the database is down (SPEC 5.5).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
-
-# --timeout-graceful-shutdown bounds the drain so a stuck request cannot hold the
-# process open until Docker's SIGKILL; compose's stop_grace_period sits above it.
-# --no-access-log drops uvicorn's access line: AccessLogMiddleware already logs
-# every request with its request id and duration, so keeping both would double it.
 CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--timeout-graceful-shutdown", "20", "--no-access-log"]
