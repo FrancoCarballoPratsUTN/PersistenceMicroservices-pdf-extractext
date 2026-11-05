@@ -26,7 +26,11 @@ from tests.fakes.fake_mongo_client import FakeMongoClientFactory
 
 
 async def _make_repo(
-    *, insert_error: Exception | None = None, find_error: Exception | None = None
+    *,
+    insert_error: Exception | None = None,
+    find_error: Exception | None = None,
+    update_error: Exception | None = None,
+    delete_error: Exception | None = None,
 ) -> MongoTextRepository:
     """Construye un repositorio sobre una conexión respaldada por el cliente fake."""
     settings = Settings(
@@ -36,7 +40,10 @@ async def _make_repo(
     connection = MongoConnection(
         settings,
         client_factory=FakeMongoClientFactory(
-            insert_error=insert_error, find_error=find_error
+            insert_error=insert_error,
+            find_error=find_error,
+            update_error=update_error,
+            delete_error=delete_error,
         ),
     )
     await connection.start()
@@ -113,6 +120,27 @@ async def test_update_changes_the_metadata_of_a_stored_text() -> None:
 
     assert updated is not None
     assert updated.metadata == {"name": "new"}
+
+
+async def test_update_maps_document_too_large_to_domain_error() -> None:
+    repo = await _make_repo(update_error=DocumentTooLarge("too large"))
+
+    with pytest.raises(DocumentTooLargeError):
+        await repo.update("abc123", TextChanges(name="otro.pdf"))
+
+
+async def test_update_maps_pymongo_error_to_persistence_error() -> None:
+    repo = await _make_repo(update_error=OperationFailure("update failed"))
+
+    with pytest.raises(PersistenceError):
+        await repo.update("abc123", TextChanges(name="otro.pdf"))
+
+
+async def test_delete_maps_pymongo_error_to_persistence_error() -> None:
+    repo = await _make_repo(delete_error=OperationFailure("delete failed"))
+
+    with pytest.raises(PersistenceError):
+        await repo.delete("abc123")
 
 
 async def test_delete_reports_whether_a_text_was_removed() -> None:

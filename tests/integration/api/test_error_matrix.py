@@ -73,6 +73,8 @@ class Row:
     provoke: Callable[[TestClient], Response]
     find_error: Exception | None = None
     insert_error: Exception | None = None
+    update_error: Exception | None = None
+    delete_error: Exception | None = None
     rethrow: bool = True
 
 
@@ -131,6 +133,14 @@ def _read_over_a_broken_database(client: TestClient) -> Response:
     return client.get("/texts?checksum=abc", headers=AUTH)
 
 
+def _update_over_a_broken_database(client: TestClient) -> Response:
+    return client.put("/texts?checksum=abc", json=NEW_NAME, headers=AUTH)
+
+
+def _delete_over_a_broken_database(client: TestClient) -> Response:
+    return client.delete("/texts?checksum=abc", headers=AUTH)
+
+
 ROWS = [
     Row(
         413,
@@ -154,6 +164,18 @@ ROWS = [
         find_error=ServerSelectionTimeoutError("no MongoDB host answered"),
     ),
     Row(
+        503,
+        "PERSISTENCE_ERROR",
+        _update_over_a_broken_database,
+        update_error=ServerSelectionTimeoutError("no MongoDB host answered"),
+    ),
+    Row(
+        503,
+        "PERSISTENCE_ERROR",
+        _delete_over_a_broken_database,
+        delete_error=ServerSelectionTimeoutError("no MongoDB host answered"),
+    ),
+    Row(
         500,
         "INTERNAL_ERROR",
         _read_over_a_broken_database,
@@ -174,6 +196,8 @@ def _running(
     *,
     find_error: Exception | None = None,
     insert_error: Exception | None = None,
+    update_error: Exception | None = None,
+    delete_error: Exception | None = None,
     rethrow: bool = True,
 ) -> TestClient:
     """Devuelve toda la app sirviendo en memoria, sobre una base de datos que puede
@@ -195,7 +219,10 @@ def _running(
     connection = MongoConnection(
         settings,
         client_factory=FakeMongoClientFactory(
-            find_error=find_error, insert_error=insert_error
+            find_error=find_error,
+            insert_error=insert_error,
+            update_error=update_error,
+            delete_error=delete_error,
         ),
     )
     app = create_app(settings=settings, connection=connection)
@@ -214,6 +241,8 @@ def client(row: Row) -> Iterator[TestClient]:
     with _running(
         find_error=row.find_error,
         insert_error=row.insert_error,
+        update_error=row.update_error,
+        delete_error=row.delete_error,
         rethrow=row.rethrow,
     ) as running:
         yield running

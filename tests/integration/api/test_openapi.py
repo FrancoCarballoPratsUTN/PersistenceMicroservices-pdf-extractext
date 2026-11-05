@@ -266,7 +266,7 @@ def test_the_documented_codes_are_exactly_the_error_vocabulary(
     problem = document["components"]["schemas"]["Problem"]
 
     assert sorted(problem["properties"]["code"]["enum"]) == sorted(
-        error.code for error in ALL_ERROR_CLASSES
+        {error.code for error in ALL_ERROR_CLASSES}
     )
 
 

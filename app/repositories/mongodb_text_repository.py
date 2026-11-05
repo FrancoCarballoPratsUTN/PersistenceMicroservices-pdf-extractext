@@ -13,6 +13,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from pymongo import ReturnDocument
 from pymongo.errors import DocumentTooLarge as PymongoDocumentTooLarge
 from pymongo.errors import DuplicateKeyError as PymongoDuplicateKeyError
 from pymongo.errors import PyMongoError
@@ -95,14 +96,24 @@ class MongoTextRepository:
             update["name"] = changes.name
         if changes.metadata is not None:
             update["metadata"] = changes.metadata
-        document = await self._collection.find_one_and_update(
-            {"_id": checksum}, {"$set": update}, return_document=True
-        )
+        try:
+            document = await self._collection.find_one_and_update(
+                {"_id": checksum},
+                {"$set": update},
+                return_document=ReturnDocument.AFTER,
+            )
+        except PymongoDocumentTooLarge as error:
+            raise DocumentTooLargeError() from error
+        except PyMongoError as error:
+            raise PersistenceError(str(error)) from error
         return _to_stored(document) if document is not None else None
 
     async def delete(self, checksum: str) -> bool:
         """Elimina un texto, informando de si había alguno que eliminar."""
-        result = await self._collection.delete_one({"_id": checksum})
+        try:
+            result = await self._collection.delete_one({"_id": checksum})
+        except PyMongoError as error:
+            raise PersistenceError(str(error)) from error
         return result.deleted_count == 1
 
     async def count(self) -> int:

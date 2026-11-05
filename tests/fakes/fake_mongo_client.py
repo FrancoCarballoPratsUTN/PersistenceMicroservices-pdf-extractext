@@ -11,6 +11,7 @@ operaciones que realiza este servicio.
 
 from typing import Any
 
+from pymongo import ReturnDocument
 from pymongo.errors import (
     DuplicateKeyError,
     OperationFailure,
@@ -83,6 +84,10 @@ class FakeCollection:
     async def find_one_and_update(
         self, filter: dict[str, Any], update: dict[str, Any], **kwargs: Any
     ) -> dict[str, Any] | None:
+        if self._client.update_error is not None:
+            raise self._client.update_error
+        if kwargs.get("return_document") is not ReturnDocument.AFTER:
+            raise AssertionError("update must return the document after the change")
         identifier = filter.get("_id")
         document = self._client.documents.get(identifier)
         if document is None:
@@ -91,6 +96,8 @@ class FakeCollection:
         return dict(document)
 
     async def delete_one(self, filter: dict[str, Any], **kwargs: Any) -> Any:
+        if self._client.delete_error is not None:
+            raise self._client.delete_error
         identifier = filter.get("_id")
         if self._client.documents.pop(identifier, None) is None:
             return _Result(deleted_count=0)
@@ -134,6 +141,8 @@ class FakeMongoClient:
         index_fails: bool,
         insert_error: Exception | None = None,
         find_error: Exception | None = None,
+        update_error: Exception | None = None,
+        delete_error: Exception | None = None,
         close_error: Exception | None = None,
     ) -> None:
         self.uri = uri
@@ -142,6 +151,8 @@ class FakeMongoClient:
         self.index_fails = index_fails
         self.insert_error = insert_error
         self.find_error = find_error
+        self.update_error = update_error
+        self.delete_error = delete_error
         self.close_error = close_error
         self.pings = 0
         self.indexes: list[tuple[str, str]] = []
@@ -175,12 +186,16 @@ class FakeMongoClientFactory:
         index_fails: bool = False,
         insert_error: Exception | None = None,
         find_error: Exception | None = None,
+        update_error: Exception | None = None,
+        delete_error: Exception | None = None,
         close_error: Exception | None = None,
     ) -> None:
         self.ping_fails = ping_fails
         self.index_fails = index_fails
         self.insert_error = insert_error
         self.find_error = find_error
+        self.update_error = update_error
+        self.delete_error = delete_error
         self.close_error = close_error
         self.clients: list[FakeMongoClient] = []
 
@@ -192,6 +207,8 @@ class FakeMongoClientFactory:
             index_fails=self.index_fails,
             insert_error=self.insert_error,
             find_error=self.find_error,
+            update_error=self.update_error,
+            delete_error=self.delete_error,
             close_error=self.close_error,
         )
         self.clients.append(client)
