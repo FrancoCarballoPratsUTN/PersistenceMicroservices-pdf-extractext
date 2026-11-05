@@ -891,8 +891,8 @@ R6→R11→R17 (configuración/Mongo), R2→R13 (repositorio) y R16/R20 al final
 
 ### Phase 3: Configuración, alcance e integraciones
 
-- [ ] **R6: configuración con una sola fuente y sin alias.**
-- [ ] **R7: dependencias declaradas correctamente (`python-dotenv`, sin `pydantic-settings`).**
+- [x] **R6: configuración con una sola fuente y sin alias.**
+- [x] **R7: dependencias declaradas correctamente (`python-dotenv`, sin `pydantic-settings`).**
 - [ ] **R8: CORS cerrado por defecto o eliminado.**
 - [ ] **R9: Consul no bloqueante, con retry y parseo seguro.**
 - [ ] **R10: eliminar métricas y confirmar que `/metrics` es `404`.**
@@ -1135,16 +1135,16 @@ en `app/config.py`), eliminar `pydantic-settings` (no se usa) y confirmar que
 `prometheus_client` no se agrega. Regenerar `uv.lock`.
 
 **Acceptance criteria:**
-- [ ] `pyproject.toml` incluye `python-dotenv` y ya no incluye
+- [x] `pyproject.toml` incluye `python-dotenv` y ya no incluye
       `pydantic-settings`.
-- [ ] `uv lock`/`uv sync --frozen` pasan y `uv.lock` queda actualizado.
-- [ ] `uv tree` muestra `python-dotenv` como dependencia directa.
-- [ ] No hay `prometheus_client` en `pyproject.toml` ni en `uv.lock`.
+- [x] `uv lock`/`uv sync --frozen` pasan y `uv.lock` queda actualizado.
+- [x] `uv tree` muestra `python-dotenv` como dependencia directa.
+- [x] No hay `prometheus_client` en `pyproject.toml` ni en `uv.lock`.
 
 **Verification:**
-- [ ] `uv lock --check`
-- [ ] `uv sync --frozen`
-- [ ] `uv tree | rg "python-dotenv|pydantic-settings|prometheus"`
+- [x] `uv lock --check`
+- [x] `uv sync --frozen`
+- [x] `uv tree | rg "python-dotenv|pydantic-settings|prometheus"`
 
 **Dependencies:** None
 **Files likely touched:** `pyproject.toml`, `uv.lock`

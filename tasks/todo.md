@@ -393,10 +393,10 @@ Este servicio **cambia** el contrato. Antes de conectarlo:
 **Deps:** — · **Files:** `app/config.py`, `app/repositories/mongodb.py`, `app/main.py`, `tests/unit/test_config.py` · **Scope:** Medium
 
 ### R7: Dependencias declaradas correctamente
-- [ ] `python-dotenv` como dependencia directa.
-- [ ] Eliminar `pydantic-settings`.
-- [ ] Sin `prometheus_client` en `pyproject.toml`/`uv.lock`.
-- [ ] Regenerar `uv.lock`.
+- [x] `python-dotenv` como dependencia directa.
+- [x] Eliminar `pydantic-settings`.
+- [x] Sin `prometheus_client` en `pyproject.toml`/`uv.lock`.
+- [x] Regenerar `uv.lock`.
 
 **AC:** dependencias reales declaradas · lock reproducible.
 **Verify:** `uv lock --check` · `uv sync --frozen` · `uv tree | rg "python-dotenv|pydantic-settings|prometheus"`.
