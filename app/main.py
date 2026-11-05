@@ -35,12 +35,12 @@ from app.api.middleware import (
 )
 from app.api.routers import health, texts
 from app.api.schemas import publish
-from app.config import Settings, get_settings, get_settings_from_values
+from app.config import Settings, get_settings
 from app.consul import load_prefix
 from app.consul_agent import deregister_service, register_service
 from app.logging_setup import configure_logging
+from app.repositories.mongo_text_repository import MongoTextRepository
 from app.repositories.mongodb import MongoConnection
-from app.repositories.mongodb_text_repository import MongoTextRepository
 from app.services.text_service import TextService
 
 logger = logging.getLogger(__name__)
@@ -55,7 +55,7 @@ def _settings_from_environment_or_consul() -> Settings:
     values = load_prefix(
         address, token, prefix, ca_file=os.getenv("CONSUL_HTTP_CA_FILE")
     )
-    return get_settings_from_values(values)
+    return get_settings(values)
 
 
 def _consul_registration() -> dict[str, object] | None:

@@ -19,8 +19,8 @@ import pytest
 from app.config import Settings
 from app.errors import ChecksumAlreadyExistsError
 from app.main import create_app
+from app.repositories.mongo_text_repository import MongoTextRepository
 from app.repositories.mongodb import MongoConnection
-from app.repositories.mongodb_text_repository import MongoTextRepository
 from app.services.text_service import TextService
 from app.use_cases.ports import CreateTextCommand
 from tests.fakes.fake_mongo_client import FakeMongoClient, FakeMongoClientFactory

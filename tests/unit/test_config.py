@@ -63,6 +63,38 @@ def test_the_documented_defaults_apply_when_only_the_token_is_set(token):
     assert settings.log_level == "INFO"
 
 
+def test_injected_values_are_the_only_configuration_source(monkeypatch):
+    monkeypatch.setenv("PERSISTENCE_API_TOKEN", "outside-token")
+    monkeypatch.setenv("MONGO_DATABASE", "outside-database")
+
+    settings = get_settings({"PERSISTENCE_API_TOKEN": "injected-token"})
+
+    assert settings.service_api_token == "injected-token"
+    assert settings.mongo_database == "pdf_extractext"
+
+
+def test_injected_values_can_set_configuration_without_environment(monkeypatch):
+    monkeypatch.delenv("PERSISTENCE_API_TOKEN", raising=False)
+    values = {
+        "PERSISTENCE_API_TOKEN": "injected-token",
+        "MONGO_DATABASE": "injected-database",
+        "MONGO_TIMEOUT_MS": "250",
+    }
+
+    settings = get_settings(values)
+
+    assert settings.service_api_token == "injected-token"
+    assert settings.mongo_database == "injected-database"
+    assert settings.mongo_timeout_ms == 250
+
+
+def test_injected_values_require_a_token_even_if_environment_has_one(monkeypatch):
+    monkeypatch.setenv("PERSISTENCE_API_TOKEN", "outside-token")
+
+    with pytest.raises(ConfigurationError, match="PERSISTENCE_API_TOKEN"):
+        get_settings({})
+
+
 def test_the_token_is_read_from_the_environment(token):
     assert get_settings().service_api_token == "s3cr3t-token"
 

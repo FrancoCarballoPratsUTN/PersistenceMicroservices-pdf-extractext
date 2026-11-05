@@ -305,88 +305,88 @@ Este servicio **cambia** el contrato. Antes de conectarlo:
 ## Phase 1: Contrato de errores y persistencia
 
 ### R1: `DocumentTooLargeError` es un `413` y el fake es fiel al dominio
-- [ ] `DocumentTooLargeError` hereda de `PayloadTooLargeError` (`413`,
+- [x] `DocumentTooLargeError` hereda de `PayloadTooLargeError` (`413`,
       `PAYLOAD_TOO_LARGE`).
-- [ ] Test de API: `DocumentTooLarge` de Mongo ⇒ `413`, no `500`.
-- [ ] `FakeTextRepository` lanza `ChecksumAlreadyExistsError` en duplicado.
-- [ ] Eliminar `DuplicateKeyError` de producción o dejar de usarlo en tests.
-- [ ] Tests de repositorio, puerto y matriz de errores actualizados.
+- [x] Test de API: `DocumentTooLarge` de Mongo ⇒ `413`, no `500`.
+- [x] `FakeTextRepository` lanza `ChecksumAlreadyExistsError` en duplicado.
+- [x] Eliminar `DuplicateKeyError` de producción o dejar de usarlo en tests.
+- [x] Tests de repositorio, puerto y matriz de errores actualizados.
 
 **AC:** `413` de punta a punta · fake igual al repositorio real · sin `500`.
 **Verify:** `uv run pytest tests/integration/repositories/test_mongo_text_repository.py tests/integration/api/test_error_matrix.py tests/unit/use_cases/test_ports.py`
 **Deps:** — · **Files:** `app/errors.py`, `app/repositories/mongodb_text_repository.py`, `tests/fakes/fake_text_repository.py`, tests de repositorio/matriz · **Scope:** Small
 
 ### R2: `update`/`delete` traducen todos los `PyMongoError`
-- [ ] `update` captura `DocumentTooLarge` y `PyMongoError`.
-- [ ] `delete` captura `PyMongoError`.
-- [ ] `PUT`/`DELETE` con Mongo caído ⇒ `503`, no `500`.
-- [ ] `return_document=ReturnDocument.AFTER`.
-- [ ] Tests de repositorio y API para ambos verbos.
+- [x] `update` captura `DocumentTooLarge` y `PyMongoError`.
+- [x] `delete` captura `PyMongoError`.
+- [x] `PUT`/`DELETE` con Mongo caído ⇒ `503`, no `500`.
+- [x] `return_document=ReturnDocument.AFTER`.
+- [x] Tests de repositorio y API para ambos verbos.
 
 **AC:** ningún `PyMongoError` escapa de `update`/`delete` · `503` correcto.
 **Verify:** `uv run pytest tests/integration/repositories/test_mongo_text_repository.py -k "update or delete"` · `uv run pytest tests/integration/api/test_error_matrix.py -k "503"`
 **Deps:** R1 · **Files:** `app/repositories/mongodb_text_repository.py`, tests de repositorio/matriz · **Scope:** Small
 
 ### R3: `PersistenceError` deja de filtrar el mensaje del driver
-- [ ] Eliminar todo `PersistenceError(str(error))`.
-- [ ] `detail` de `503` es el default seguro.
-- [ ] Error real logueado con operación y `request_id`.
-- [ ] Test: el body de `503` no contiene texto del driver.
+- [x] Eliminar todo `PersistenceError(str(error))`.
+- [x] `detail` de `503` es el default seguro.
+- [x] Error real logueado con operación y `request_id`.
+- [x] Test: el body de `503` no contiene texto del driver.
 
 **AC:** sin fuga de host/topología/mensaje de pymongo · log interno conserva el detalle.
 **Verify:** `uv run pytest tests/integration/api/test_error_matrix.py -k "persistence"` · `rg "PersistenceError\\(str\\(" app tests` sin resultados.
 **Deps:** R1, R2 · **Files:** `app/repositories/mongodb_text_repository.py`, tests de API/repositorio · **Scope:** XS
 
 ### Checkpoint 1: errores y persistencia
-- [ ] `DocumentTooLarge` ⇒ `413`.
-- [ ] Fallo de Mongo en `PUT`/`DELETE` ⇒ `503`.
-- [ ] Ningún `detail` de `503` filtra el driver.
-- [ ] `uv run pytest --cov=app --cov-fail-under=85` pasa.
-- [ ] `uv run ruff check .` y `uv run ruff format --check .` pasan.
+- [x] `DocumentTooLarge` ⇒ `413`.
+- [x] Fallo de Mongo en `PUT`/`DELETE` ⇒ `503`.
+- [x] Ningún `detail` de `503` filtra el driver.
+- [x] `uv run pytest --cov=app --cov-fail-under=85` pasa.
+- [x] `uv run ruff check .` y `uv run ruff format --check .` pasan.
 
 ---
 
 ## Phase 2: Frontera HTTP y trazabilidad
 
 ### R4: `X-Request-ID` de extremo a extremo, incluido `401`
-- [ ] Orden: `CORS → RequestId → AccessLog → BearerAuth → ContentType → BodySize`.
-- [ ] `401`, `415`, `413`, `400`, `409`, `503`, `500` llevan `X-Request-ID`.
-- [ ] ID válido se eco; inválido/largo se reemplaza.
-- [ ] Access log incluye `request_id`; sin línea duplicada.
-- [ ] Contextvar/filtro inyecta `request_id` en todos los logs de `app.*`.
-- [ ] Tests: `401` con header, access log, header inválido saneado.
+- [x] Orden: `CORS → RequestId → AccessLog → BearerAuth → ContentType → BodySize`.
+- [x] `401`, `415`, `413`, `400`, `409`, `503`, `500` llevan `X-Request-ID`.
+- [x] ID válido se eco; inválido/largo se reemplaza.
+- [x] Access log incluye `request_id`; sin línea duplicada.
+- [x] Contextvar/filtro inyecta `request_id` en todos los logs de `app.*`.
+- [x] Tests: `401` con header, access log, header inválido saneado.
 
 **AC:** trazabilidad completa · orden `401 → 415 → 413 → 400` intacto.
 **Verify:** `uv run pytest tests/unit/api/test_middleware.py -k "request_id or access_log"` · `uv run pytest tests/unit/api/test_auth.py -k "request_id"` · `curl -i localhost:8082/texts?checksum=x` sin token ⇒ `401` + `x-request-id`.
 **Deps:** — · **Files:** `app/main.py`, `app/api/middleware.py`, `app/logging_setup.py`, `tests/unit/api/test_middleware.py`, `tests/unit/api/test_auth.py` · **Scope:** Medium
 
 ### R5: Límite real de body contra `chunked`
-- [ ] Middleware ASGI cuenta bytes reales y repite el body.
-- [ ] `chunked` mayor al límite ⇒ `413` antes del router.
-- [ ] `Content-Length` mayor al límite ⇒ rechazo temprano.
-- [ ] Body válido dentro del límite llega intacto a `request.json()`.
-- [ ] Test con `receive` y `more_body=True`.
+- [x] Middleware ASGI cuenta bytes reales y repite el body.
+- [x] `chunked` mayor al límite ⇒ `413` antes del router.
+- [x] `Content-Length` mayor al límite ⇒ rechazo temprano.
+- [x] Body válido dentro del límite llega intacto a `request.json()`.
+- [x] Test con `receive` y `more_body=True`.
 
 **AC:** `chunked` no evade `MAX_TEXT_BODY_BYTES` · memoria acotada.
 **Verify:** `uv run pytest tests/unit/api/test_middleware.py -k "body_size or chunked"` · `curl -i -X POST ... -H "Transfer-Encoding: chunked" --data-binary @archivo-grande` ⇒ `413`.
 **Deps:** R4 · **Files:** `app/api/middleware.py`, `tests/unit/api/test_middleware.py` · **Scope:** Medium
 
 ### Checkpoint 2: HTTP y trazabilidad
-- [ ] `401` con `X-Request-ID` y access log con ID.
-- [ ] `X-Request-ID` inválido saneado.
-- [ ] Body `chunked` fuera de límite ⇒ `413`.
-- [ ] Orden `401 → 415 → 413 → 400` verificado.
-- [ ] `uv run pytest --cov=app --cov-fail-under=85` pasa.
+- [x] `401` con `X-Request-ID` y access log con ID.
+- [x] `X-Request-ID` inválido saneado.
+- [x] Body `chunked` fuera de límite ⇒ `413`.
+- [x] Orden `401 → 415 → 413 → 400` verificado.
+- [x] `uv run pytest --cov=app --cov-fail-under=85` pasa.
 
 ---
 
 ## Phase 3: Configuración, alcance e integraciones
 
 ### R6: Configuración con una sola fuente y sin alias
-- [ ] `get_settings(environ)` no mezcla `os.getenv`.
-- [ ] Eliminar propiedades `mongodb_*` y `get_settings_from_values`.
-- [ ] `mongodb.py` y `main.py` usan `mongo_*` y `get_settings(values)`.
-- [ ] Tests de mapping inyectado y defaults.
+- [x] `get_settings(environ)` no mezcla `os.getenv`.
+- [x] Eliminar propiedades `mongodb_*` y `get_settings_from_values`.
+- [x] `mongodb.py` y `main.py` usan `mongo_*` y `get_settings(values)`.
+- [x] Tests de mapping inyectado y defaults.
 
 **AC:** una sola fuente de verdad · token obligatorio · defaults intactos.
 **Verify:** `uv run pytest tests/unit/test_config.py` · `rg "mongodb_|get_settings_from_values" app tests` sin resultados.

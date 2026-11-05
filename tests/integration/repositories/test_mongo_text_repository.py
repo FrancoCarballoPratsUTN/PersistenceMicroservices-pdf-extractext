@@ -19,8 +19,8 @@ from app.errors import (
     DocumentTooLargeError,
     PersistenceError,
 )
+from app.repositories.mongo_text_repository import MongoTextRepository
 from app.repositories.mongodb import MongoConnection
-from app.repositories.mongodb_text_repository import MongoTextRepository
 from app.use_cases.ports import StoredText, TextChanges, TextRepository
 from tests.fakes.fake_mongo_client import FakeMongoClientFactory
 
