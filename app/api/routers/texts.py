@@ -39,7 +39,7 @@ async def _read_json(request: Request) -> Any:
     openapi_extra={
         "responses": {
             "200": answered_with("Text", "The text as it stands."),
-            **failing_with("400", "401", "404"),
+            **failing_with("400", "401", "404", "503"),
         },
         "security": SECURITY,
     },
@@ -59,7 +59,7 @@ async def get_text(
         "requestBody": accepts("CreateText"),
         "responses": {
             "201": answered_with("Acknowledgement", "The text was stored."),
-            **failing_with("400", "401", "409", "413", "415"),
+            **failing_with("400", "401", "409", "413", "415", "503"),
         },
         "security": SECURITY,
     },
@@ -83,7 +83,7 @@ async def create_text(
         "requestBody": accepts("UpdateText"),
         "responses": {
             "200": answered_with("Text", "The text after the change."),
-            **failing_with("400", "401", "404", "413", "415"),
+            **failing_with("400", "401", "404", "413", "415", "503"),
         },
         "security": SECURITY,
     },
@@ -103,7 +103,7 @@ async def update_text(
     openapi_extra={
         "responses": {
             "200": answered_with("Acknowledgement", "The text was removed."),
-            **failing_with("400", "401", "404"),
+            **failing_with("400", "401", "404", "503"),
         },
         "security": SECURITY,
     },

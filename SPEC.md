@@ -305,11 +305,12 @@ La regla es una frontera, no una prohibición: `pydantic` vive en `app/api/` y
 Tres decisiones que el uso de Pydantic **no** cambió, y por qué:
 
 - **No hay `response_model`.** Pydantic serializa `datetime` con microsegundos
-  (`.789000Z`), y la salida del servicio es RFC 3339 **con milisegundos**. Los
+  (`.789000Z`), y la salida del servicio es RFC 3339 **con milisegundos** (por
+  ejemplo, `.789Z`). Los
   modelos sirven para el schema; los bytes los sigue escribiendo
   `serialization.py`.
-- **`Problem` sigue siendo un `dict`.** Su `code` es una enumeración leída de
-  `ServiceError.__subclasses__()` en tiempo de ejecución, y de una introspección
+- **`Problem` sigue siendo un `dict`.** Su `code` enumera recursivamente las
+  subclases de `ServiceError` y elimina códigos repetidos; de esa introspección
   en tiempo de ejecución no se deriva un tipo estático. Es el único componente
   de `/openapi.json` escrito a mano, y `tests/integration/api/test_openapi.py`
   compara su `enum` contra `app/errors.py`.
@@ -412,17 +413,20 @@ PersistenceMicroservices-pdf-extractext/
 | Variable | Tipo | Def. | Propósito |
 |---|---|---|---|
 | `APP_NAME` | `str` | `Persistence Microservice` | título OpenAPI |
-| `SERVICE_API_TOKEN` | `str` | **— (obligatoria)** | secreto Bearer compartido |
-| `MONGO_URI` | `str` | `mongodb://localhost:27017` | conexión |
+| `PERSISTENCE_API_TOKEN` | `str` | **— (obligatoria)** | secreto Bearer canónico |
+| `SERVICE_API_TOKEN` | `str` | — | alias de compatibilidad del secreto Bearer |
+| `MONGO_URI` | `str` | local: `mongodb://localhost:27017`; Compose: obligatoria | conexión |
 | `MONGO_DATABASE` | `str` | `pdf_extractext` | base de datos |
 | `MONGO_TEXTS_COLLECTION` | `str` | `texts` | colección |
 | `MONGO_TIMEOUT_MS` | `int` | `5000` | timeout de operaciones Mongo |
 | `MAX_TEXT_BODY_BYTES` | `int` | `10485760` (10 MiB) | límite del body (riesgo B) |
 | `LOG_LEVEL` | `str` | `INFO` | nivel mínimo del logging del servicio |
+| `CORS_ALLOW_ORIGINS` | `str` | vacío | orígenes CORS permitidos, separados por coma |
 
-`SERVICE_API_TOKEN` **no tiene default**: si falta o está vacía, la app **no
-arranca** y falla al inicializar con un error explícito. Se prefiere fallar
-rápido a levantar un servicio sin protección.
+`PERSISTENCE_API_TOKEN` es el nombre canónico y tiene precedencia. Si no está
+definido, `SERVICE_API_TOKEN` se acepta como alias. Si ambos faltan o están
+vacíos, la app **no arranca** y falla al inicializar con un error explícito.
+Se prefiere fallar rápido a levantar un servicio sin protección.
 
 El token **nunca** se loguea, ni en debug, ni en el mensaje de error.
 
@@ -444,6 +448,8 @@ PROTEGIDO PUT    /texts?checksum=<valor>            Content-Type: application/js
 PROTEGIDO DELETE /texts?checksum=<valor>
 ```
 
+No existe endpoint de métricas: `GET /metrics` responde `404`.
+
 `/health` y `/readyz` quedan abiertos para sondas de plataforma (k8s, load
 balancers) que no pueden llevar credenciales. `/readyz` revela si Mongo está
 alcanzable, que es información aceptable en un entorno de red interna y
@@ -459,7 +465,8 @@ Algoritmo:
   1. Extraer el esquema; si no es exactamente "Bearer" (case-insensitive)
      → Unauthorized
   2. Extraer el valor; si falta o está vacío → Unauthorized
-  3. secrets.compare_digest(valor, SERVICE_API_TOKEN) — tiempo constante
+  3. secrets.compare_digest(valor.encode("utf-8"),
+     token_configurado.encode("utf-8")) — tiempo constante
   4. Falso en cualquiera de los pasos → Unauthorized
 ```
 
@@ -469,6 +476,7 @@ Respuesta de rechazo:
 HTTP/1.1 401 Unauthorized
 Content-Type: application/problem+json
 WWW-Authenticate: Bearer
+X-Request-ID: 3f2a91c8e7b4d05a
 ```
 
 ```json
@@ -494,31 +502,39 @@ Decisiones de seguridad:
 - El esquema se compara case-insensitivamente (`bearer` es válido según
   RFC 7235), el **valor** no: los tokens son sensibles a mayúsculas.
 
-### 3.3 Orden de validación
+### 3.3 Orden de middleware y validación
 
-De la más barata a la más costosa, para no gastar trabajo en peticiones que van
-a fallar:
+Orden de ejecución del middleware, de fuera hacia dentro:
 
+```text
+CORS → RequestId → AccessLog → BearerAuth → ContentType → BodySize → router
 ```
+
+Orden de validación, de la más barata a la más costosa:
+
+```text
 401 (auth) → 415 (content-type) → 413 (tamaño) → 400 (estructura) → [Capa 2]
 ```
 
-La autenticación va **primero** a propósito: no se parsea ni se limita el body
-de un llamador no autenticado. Es además la primera barrera contra abuso de
-recursos.
+La autenticación se valida antes de inspeccionar el tipo o el contenido del
+body. `RequestId` y `AccessLog` la envuelven para que incluso un `401` incluya
+`X-Request-ID` y una sola línea de acceso con método, ruta, estado, duración e ID.
+Un ID válido (`[A-Za-z0-9._-]{1,128}`) se devuelve sin cambios; si falta o no es
+válido, se genera uno de 32 caracteres hexadecimales.
 
 ### 3.4 Flujo de una petición (`POST /texts`)
 
-1. `AuthMiddleware` — valida el Bearer; `401` si falla.
-2. `RequestIdMiddleware` — lee o genera `X-Request-ID`, lo devuelve y lo loguea.
-3. `ContentTypeMiddleware` — POST/PUT exigen `application/json`; si no, `415`.
-4. `BodySizeLimitMiddleware` — `Content-Length` > `MAX_TEXT_BODY_BYTES` → `413`.
-5. `await request.json()` → JSON inválido o no-`object` → `400`.
-6. `validators/create_text.validate(raw)` — tipado nativo → `CreateTextCommand`
+1. `RequestIdMiddleware` — lee o genera `X-Request-ID` y lo añade a la respuesta.
+2. `AccessLogMiddleware` — registra método, ruta, estado, duración e ID una vez.
+3. `BearerAuthMiddleware` — valida el Bearer; `401` si falla.
+4. `ContentTypeMiddleware` — POST/PUT exigen `application/json`; si no, `415`.
+5. `BodySizeLimitMiddleware` — bytes recibidos > `MAX_TEXT_BODY_BYTES` → `413`.
+6. `await request.json()` → JSON inválido o no-`object` → `400`.
+7. `validators/create_text.validate(raw)` — tipado nativo → `CreateTextCommand`
    o `ValidationError` → `400`.
-7. `text_service.create(command)` → **Capa 2**.
-8. `201` + `Location: /texts?checksum=<escaped>` + `{"message","checksum"}`.
-9. Cualquier `ServiceError` lo serializa `exception_handlers` como
+8. `text_service.create(command)` → **Capa 2**.
+9. `201` + `Location: /texts?checksum=<escaped>` + `{"message","checksum"}`.
+10. Cualquier `ServiceError` lo serializa `exception_handlers` como
    problem details.
 
 ---
@@ -537,9 +553,9 @@ class TextRepository(Protocol):
 ```
 
 `Protocol` estructural en vez de `ABC`: la Capa 2 no importa nada de la Capa 3,
-y el `FakeTextRepository` de tests cumple el contrato sin herencia.
-La sonda de disponibilidad ejecuta `ping` a través de `MongoConnection`, fuera
-del puerto `TextRepository`.
+y el `FakeTextRepository` de tests cumple el contrato sin herencia. `count()` fue
+eliminado del puerto. La sonda de disponibilidad ejecuta `ping` a través de
+`MongoConnection`, fuera del puerto `TextRepository`.
 
 ### 4.2 Reglas de negocio
 
@@ -650,17 +666,21 @@ correcto gracias a la Barrera 2.
 | `ExecutionTimeout` | operación lenta | `503 PERSISTENCE_ERROR` |
 | `PyMongoError` (resto) | inesperado | `503 PERSISTENCE_ERROR` |
 
+Los `PyMongoError` de `update` (`PUT`) y `delete` (`DELETE`) también se traducen
+a `503`; `DocumentTooLarge` durante `update` se traduce a `413`.
+
 Este mapeo vive en la Capa 3 pero **se expresa con las excepciones de
 `app/errors.py`**: la Capa 3 lanza errores de dominio, nunca HTTP. El acceso a
 datos no conoce códigos de estado; la traducción ocurre en la Capa 1.
 
-> `RepositoryError` se traduce a `503` y no a `500` porque es infraestructura
-> caída: el orquestador puede reintentar. Un `500` le quitaría esa opción.
+> `PersistenceError` se traduce a `503` y no a `500`. Si MongoDB no está
+> disponible, el orquestador puede reintentar la operación.
 
 ### 5.5 Arranque
 
-En el `lifespan` de FastAPI: validar que `SERVICE_API_TOKEN` esté presente,
-abrir el cliente Mongo y comprobar disponibilidad con `ping`. MongoDB crea el
+En el `lifespan` de FastAPI: validar que `PERSISTENCE_API_TOKEN` o su alias
+`SERVICE_API_TOKEN` esté presente, abrir el cliente Mongo y comprobar
+disponibilidad con `ping`. MongoDB crea el
 índice único `_id_` automáticamente; el servicio no crea índices secundarios.
 
 ---
@@ -707,12 +727,13 @@ comparar errores por `title`. La información variable va en `detail`.
 | `UNSUPPORTED_MEDIA_TYPE` | 415 | `/problems/unsupported_media_type` | `Unsupported media type` | 1 | `Content-Type` ≠ `application/json` |
 | `METHOD_NOT_ALLOWED` | 405 | `/problems/method_not_allowed` | `Method not allowed` | 1 | Verbo no soportado en la ruta |
 | `NOT_FOUND` | 404 | `/problems/not_found` | `Resource not found` | 1 | Ruta inexistente |
-| `PERSISTENCE_ERROR` | 503 | `/problems/persistence_error` | `Persistence unavailable` | 3→2 | MongoDB inalcanzable o error de servidor |
+| `PERSISTENCE_ERROR` | 503 | `/problems/persistence_error` | `Persistence unavailable` | 3→2 | MongoDB inalcanzable, ping fallido, documento inválido o error de persistencia |
 | `INTERNAL_ERROR` | 500 | `/problems/internal_error` | `Internal server error` | 1 | Excepción no prevista (catch-all) |
 
-`PAYLOAD_TOO_LARGE` y `PERSISTENCE_ERROR` aparecen con dos orígenes porque
-pueden producirse en capas distintas; el cuerpo de la respuesta es idéntico en
-ambos casos, así que el cliente no necesita saber dónde se originó.
+`PAYLOAD_TOO_LARGE` puede originarse por el límite del body o por el tamaño BSON.
+`PERSISTENCE_ERROR` agrupa los fallos de disponibilidad, driver y datos
+almacenados inválidos. Cada código mantiene la misma respuesta segura para todos
+sus orígenes.
 
 ### 6.3 El caso `409` en detalle
 
@@ -761,7 +782,7 @@ X-Request-ID: 3f2a91c8e7b4d05a
 ║  ORQUESTADOR (Go)      ║  POST /texts  {"text","checksum","name","metadata"}
 ║  :8080                 ║  PERSISTENCE_BASE_URL → http://localhost:8082
 ╚═══════════╤════════════╝
-            │  Authorization: Bearer <SERVICE_API_TOKEN>
+            │  Authorization: Bearer <token configurado>
             │  Content-Type: application/json
             │  X-Request-ID: 3f2a91c8e7b4d05a
             ▼
@@ -922,7 +943,7 @@ deben reescribirse en el cliente Go para las rutas con query param.
 | Q1 | Validar formato del checksum | **No** | Se elimina `INVALID_CHECKSUM` y `CHECKSUM_PATTERN`. Sólo se verifica existencia en BD |
 | Q2 | `PUT` con `text`/`checksum` | **Rechazar** `400 IMMUTABLE_FIELD` | No se ignora en silencio |
 | Q3 | Claves de `metadata` con `.`/`$` | **Se aceptan** | Riesgo asumido; no hay sanitización |
-| Q4 | Autenticación del orquestador | **Sí — Bearer token** | `SERVICE_API_TOKEN` obligatorio; fase propia en el plan |
+| Q4 | Autenticación del orquestador | **Sí — Bearer token** | `PERSISTENCE_API_TOKEN` canónico; `SERVICE_API_TOKEN` alias |
 | Q5 | `GET /texts` (listado) | **No** | Sólo `GET /texts?checksum=` |
 | Q6 | Ubicación del checksum | **Query param** | `?checksum=`; el cliente Go pasa de `PathEscape` a `QueryEscape` |
 | Q7 | `PUT` con campo ausente | **Sin cambio** | `omitempty` en Go hace la distinción inequívoca |

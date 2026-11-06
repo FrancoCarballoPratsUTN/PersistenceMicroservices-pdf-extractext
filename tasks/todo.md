@@ -508,12 +508,12 @@ Este servicio **cambia** el contrato. Antes de conectarlo:
 ## Phase 5: Documentación y hardening de producción
 
 ### R16: Alinear README/SPEC con el código corregido
-- [ ] `PERSISTENCE_API_TOKEN` canónico; `SERVICE_API_TOKEN` alias.
-- [ ] README dice la verdad sobre `X-Request-ID` y access log.
-- [ ] Ejemplo de fecha en milisegundos.
-- [ ] README/SPEC confirman ausencia de `/metrics`.
-- [ ] SPEC/código coinciden en `ping`/`count`, `413` documento y `503` en `PUT`/`DELETE`.
-- [ ] Sin contradicciones README ↔ SPEC.
+- [x] `PERSISTENCE_API_TOKEN` canónico; `SERVICE_API_TOKEN` alias.
+- [x] README dice la verdad sobre `X-Request-ID` y access log.
+- [x] Ejemplo de fecha en milisegundos.
+- [x] README/SPEC confirman ausencia de `/metrics`.
+- [x] SPEC/código coinciden en `ping`/`count`, `413` documento y `503` en `PUT`/`DELETE`.
+- [x] Sin contradicciones README ↔ SPEC.
 
 **AC:** documentación única y verdadera.
 **Verify:** revisión cruzada README/SPEC/`app/` · `rg "metrics|SERVICE_API_TOKEN|X-Request-ID|count\\(|ping" README.md SPEC.md`.

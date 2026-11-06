@@ -8,8 +8,8 @@ testear por separado. El servicio arranca con::
 
 Se usa la fábrica en vez de una instancia a nivel de módulo para que importar
 este módulo no necesite entorno alguno: la configuración se resuelve cuando
-arranca el proceso, que es donde un ``SERVICE_API_TOKEN`` ausente es fatal
-(SPEC 2.5).
+arranca el proceso, que es donde es fatal no configurar ``PERSISTENCE_API_TOKEN``
+ni su alias ``SERVICE_API_TOKEN`` (SPEC 2.5).
 """
 
 import asyncio

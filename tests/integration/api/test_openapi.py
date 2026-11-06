@@ -54,14 +54,14 @@ PROBLEM_REF = {"$ref": "#/components/schemas/Problem"}
 # debe gestionarlo.
 OPERATIONS = [
     pytest.param(
-        "/texts", "get", "200", "Text", ("400", "401", "404"), id="GET /texts"
+        "/texts", "get", "200", "Text", ("400", "401", "404", "503"), id="GET /texts"
     ),
     pytest.param(
         "/texts",
         "post",
         "201",
         "Acknowledgement",
-        ("400", "401", "409", "413", "415"),
+        ("400", "401", "409", "413", "415", "503"),
         id="POST /texts",
     ),
     pytest.param(
@@ -69,7 +69,7 @@ OPERATIONS = [
         "put",
         "200",
         "Text",
-        ("400", "401", "404", "413", "415"),
+        ("400", "401", "404", "413", "415", "503"),
         id="PUT /texts",
     ),
     pytest.param(
@@ -77,7 +77,7 @@ OPERATIONS = [
         "delete",
         "200",
         "Acknowledgement",
-        ("400", "401", "404"),
+        ("400", "401", "404", "503"),
         id="DELETE /texts",
     ),
     pytest.param("/health", "get", "200", "Probe", (), id="GET /health"),

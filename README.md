@@ -4,7 +4,7 @@ Microservicio de persistencia para el orquestador `pdf-extractext`. Recibe el
 texto extraído de un PDF y lo guarda en MongoDB, identificado por su `checksum`.
 
 La especificación completa vive en [`SPEC.md`](SPEC.md); este README explica
-cómo arrancarlo y cómo falar con él.
+cómo arrancarlo y cómo hablar con él.
 
 ## Requisitos
 
@@ -13,14 +13,16 @@ cómo arrancarlo y cómo falar con él.
 
 ## Variables de entorno
 
-Nueve variables, ocho con valor por defecto. `SERVICE_API_TOKEN` **no** tiene
-valor por defecto: sin ella el proceso no arranca (SPEC 2.5).
+`PERSISTENCE_API_TOKEN` es el nombre canónico del secreto. Se acepta
+`SERVICE_API_TOKEN` como alias de compatibilidad. Debe configurarse uno de los
+dos; sin token el proceso no arranca (SPEC 2.5).
 
 | Variable | Por defecto | Qué es |
 |---|---|---|
-| `SERVICE_API_TOKEN` | — | Secreto compartido. **Obligatoria.** |
+| `PERSISTENCE_API_TOKEN` | — | Secreto Bearer canónico; necesario si no se usa el alias. |
+| `SERVICE_API_TOKEN` | — | Alias si la variable canónica está ausente o vacía. |
 | `APP_NAME` | `Persistence Microservice` | Título del documento OpenAPI. |
-| `MONGO_URI` | `mongodb://localhost:27017` | Cadena de conexión. |
+| `MONGO_URI` | Local: `mongodb://localhost:27017`; Compose: obligatoria | Cadena de conexión. |
 | `MONGO_DATABASE` | `pdf_extractext` | Base de datos. |
 | `MONGO_TEXTS_COLLECTION` | `texts` | Colección que guarda los documentos. |
 | `MONGO_TIMEOUT_MS` | `5000` | Timeout de cada operación contra Mongo. |
@@ -76,11 +78,13 @@ El logging del servicio se configura al construir la app: `LOG_LEVEL` fija el
 nivel mínimo y las líneas de la aplicación (acceso, ciclo de vida) salen por
 `stderr` con formato `fecha nivel logger mensaje`. Se pasa `--no-access-log` para
 no duplicar cada petición: el log de acceso lo emite `AccessLogMiddleware`, que
-además incluye el `X-Request-ID` y la duración (si ya hay un handler en el logger
-raíz, como en los tests, la configuración no se pisa). El arranque y el apagado
-también se registran con su duración (`Service started in ... ms.` y
-`Shutdown finished in ... ms.`), de modo que el ciclo de vida de una instancia se
-lee de un vistazo.
+registra método, ruta, estado, duración y `request_id` en una sola línea. El
+`X-Request-ID` válido se devuelve sin cambios; si falta o no cumple el formato,
+se genera uno nuevo. La cabecera también se devuelve en rechazos `401`. Si ya
+hay un handler en el logger raíz, como en los tests, la configuración no se pisa.
+El arranque y el apagado también se registran con su duración
+(`Service started in ... ms.` y `Shutdown finished in ... ms.`), de modo que el
+ciclo de vida de una instancia se lee de un vistazo.
 
 `--timeout-graceful-shutdown 20` acota el apagado: ante un `SIGTERM`, Uvicorn
 deja de aceptar peticiones, termina las que están en vuelo, ejecuta el `lifespan`
@@ -99,7 +103,7 @@ uv run ruff format .
 
 ## Autenticación
 
-Todas las rutas exigen `Authorization: Bearer <SERVICE_API_TOKEN>` salvo
+Todas las rutas exigen `Authorization: Bearer <token configurado>` salvo
 `/health` y `/readyz`, que quedan abiertas para sondas de plataforma.
 
 El esquema se compara sin distinguir mayúsculas; el valor, no. El `detail` del
@@ -118,10 +122,12 @@ curl -i http://localhost:8000/texts?checksum=abc
 |---|---|---|---|
 | `GET` | `/health` | `200 {"status":"ok"}` | — |
 | `GET` | `/readyz` | `200 {"status":"ok","mongo":"ok"}` | `503` |
-| `POST` | `/texts` | `201` | `400` `401` `409` `413` `415` |
-| `GET` | `/texts?checksum=<valor>` | `200` | `400` `401` `404` |
-| `PUT` | `/texts?checksum=<valor>` | `200` | `400` `401` `404` `413` `415` |
-| `DELETE` | `/texts?checksum=<valor>` | `200` | `400` `401` `404` |
+| `POST` | `/texts` | `201` | `400` `401` `409` `413` `415` `503` |
+| `GET` | `/texts?checksum=<valor>` | `200` | `400` `401` `404` `503` |
+| `PUT` | `/texts?checksum=<valor>` | `200` | `400` `401` `404` `413` `415` `503` |
+| `DELETE` | `/texts?checksum=<valor>` | `200` | `400` `401` `404` `503` |
+
+No se ofrece endpoint de métricas: `GET /metrics` responde `404`.
 
 `checksum` viaja como query param y no como path param: no tiene formato
 validado, así que un valor con `/` rompería la resolución de la ruta y
@@ -210,8 +216,8 @@ curl -s http://localhost:8000/texts?checksum=9f86d081884c7d659a2feaa0c55ad015a3b
   "text": "contenido extraído del PDF...",
   "name": "contrato.pdf",
   "metadata": { "pages": 12, "duration_ms": 431, "producer": "pypdf" },
-  "created_at": "2026-10-01T12:34:56.789000Z",
-  "updated_at": "2026-10-01T12:34:56.789000Z"
+  "created_at": "2026-10-01T12:34:56.789Z",
+  "updated_at": "2026-10-01T12:34:56.789Z"
 }
 ```
 
