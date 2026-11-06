@@ -4,12 +4,14 @@ La app se ejecuta sobre el cliente Mongo fake, de modo que un documento se
 almacena mediante POST y se vuelve a leer mediante GET sin base de datos.
 """
 
+import logging
 from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings
+from app.errors import PersistenceError
 from app.main import create_app
 from app.repositories.mongodb import MongoConnection
 from tests.fakes.fake_mongo_client import FakeMongoClientFactory
@@ -25,9 +27,14 @@ BODY = {
 
 
 @pytest.fixture
-def client() -> Iterator[TestClient]:
+def factory() -> FakeMongoClientFactory:
+    return FakeMongoClientFactory()
+
+
+@pytest.fixture
+def client(factory: FakeMongoClientFactory) -> Iterator[TestClient]:
     settings = Settings(service_api_token=TOKEN, mongo_uri="mongodb://test:27017")
-    connection = MongoConnection(settings, client_factory=FakeMongoClientFactory())
+    connection = MongoConnection(settings, client_factory=factory)
     with TestClient(create_app(settings=settings, connection=connection)) as running:
         yield running
 
@@ -74,6 +81,28 @@ def test_both_timestamps_are_the_same_on_a_fresh_document(client: TestClient) ->
     body = client.get("/texts?checksum=9f86d081", headers=AUTH).json()
 
     assert body["created_at"] == body["updated_at"]
+
+
+def test_incomplete_document_is_logged_and_returns_persistence_error(
+    client: TestClient,
+    factory: FakeMongoClientFactory,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    request_id = "corrupt-text-document"
+    factory.client.documents["broken"] = {"_id": "broken"}
+
+    with caplog.at_level(
+        logging.ERROR, logger="app.repositories.mongo_text_repository"
+    ):
+        response = client.get(
+            "/texts?checksum=broken",
+            headers={**AUTH, "X-Request-ID": request_id},
+        )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == PersistenceError.default_detail
+    assert "invalid text document" in caplog.text
+    assert request_id in caplog.text
 
 
 def test_a_missing_query_parameter_is_refused(client: TestClient) -> None:

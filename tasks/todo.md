@@ -437,12 +437,12 @@ Este servicio **cambia** el contrato. Antes de conectarlo:
 **Deps:** R7 · **Files:** `app/metrics.py`, `app/api/routers/metrics.py`, `pyproject.toml`, `tests/integration/api/test_error_matrix.py` · **Scope:** XS
 
 ### Checkpoint 3: configuración y alcance
-- [ ] `get_settings(environ)` no lee el entorno real.
-- [ ] `uv sync --frozen` y `uv lock --check` pasan.
-- [ ] `python-dotenv` directo; sin `pydantic-settings`.
-- [ ] Sin referencias a métricas/`prometheus_client`.
-- [ ] Consul malformado ⇒ `ConsulConfigurationError`.
-- [ ] `uv run pytest --cov=app --cov-fail-under=85` pasa.
+- [x] `get_settings(environ)` no lee el entorno real.
+- [x] `uv sync --frozen` y `uv lock --check` pasan.
+- [x] `python-dotenv` directo; sin `pydantic-settings`.
+- [x] Sin referencias a métricas/`prometheus_client`.
+- [x] Consul malformado ⇒ `ConsulConfigurationError`.
+- [x] `uv run pytest --cov=app --cov-fail-under=85` pasa.
 
 ---
 
@@ -467,10 +467,10 @@ Este servicio **cambia** el contrato. Antes de conectarlo:
 **Deps:** R6 · **Files:** `app/repositories/mongodb.py`, `tests/unit/test_mongodb_lifecycle.py` · **Scope:** XS
 
 ### R13: `_to_stored` falla explícitamente ante documentos incompletos
-- [ ] Sin `datetime.now()` ni `or ""` para campos obligatorios.
-- [ ] Documento incompleto ⇒ error explícito y logueado.
-- [ ] Documento válido sigue mapeando los seis campos.
-- [ ] Tests de ambos casos.
+- [x] Sin `datetime.now()` ni `or ""` para campos obligatorios.
+- [x] Documento incompleto ⇒ error explícito y logueado.
+- [x] Documento válido sigue mapeando los seis campos.
+- [x] Tests de ambos casos.
 
 **AC:** no se inventan timestamps/texto · corrupción visible.
 **Verify:** `uv run pytest tests/integration/repositories/test_mongo_text_repository.py -k "stored or corrupt"` · `uv run pytest tests/integration/api/test_get_text.py`.

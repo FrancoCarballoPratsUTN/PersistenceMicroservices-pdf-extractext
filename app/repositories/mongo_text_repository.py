@@ -34,13 +34,46 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+def _invalid_stored_fields(document: dict[str, Any]) -> list[str]:
+    fields = {
+        "checksum": (document.get("checksum") or document.get("_id"), str),
+        "text": (document.get("text"), str),
+        "created_at": (document.get("created_at"), datetime),
+        "updated_at": (document.get("updated_at"), datetime),
+    }
+    invalid = [
+        name
+        for name, (value, expected_type) in fields.items()
+        if not isinstance(value, expected_type)
+    ]
+    name = document.get("name")
+    metadata = document.get("metadata")
+    if name is not None and not isinstance(name, str):
+        invalid.append("name")
+    if metadata is not None and not isinstance(metadata, dict):
+        invalid.append("metadata")
+    return invalid
+
+
 def _to_stored(document: dict[str, Any]) -> StoredText:
-    """Reconstruye un texto almacenado a partir del documento que devolvió MongoDB."""
+    """Reconstruye un texto y falla si MongoDB devolvió datos incompletos."""
+    invalid_fields = _invalid_stored_fields(document)
+    if invalid_fields:
+        fields = ",".join(invalid_fields)
+        logger.error(
+            "MongoDB returned an invalid text document fields=%s request_id=%s",
+            fields,
+            request_id_context.get() or "-",
+        )
+        raise PersistenceError() from ValueError(
+            f"Missing or invalid document fields: {fields}"
+        )
+
     return StoredText(
-        checksum=document.get("checksum") or document["_id"],
-        text=document.get("text", ""),
-        created_at=document.get("created_at") or _utcnow(),
-        updated_at=document.get("updated_at") or _utcnow(),
+        checksum=document.get("checksum") or document.get("_id"),
+        text=document["text"],
+        created_at=document["created_at"],
+        updated_at=document["updated_at"],
         name=document.get("name"),
         metadata=document.get("metadata"),
     )
