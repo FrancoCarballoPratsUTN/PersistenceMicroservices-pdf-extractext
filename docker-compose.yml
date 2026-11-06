@@ -1,20 +1,23 @@
-# Microservicio de persistencia detrás del Traefik compartido.
-#
-# MongoDB, Traefik y la red `mired` se proporcionan desde D:\Services.
+# Microservicio de persistence detrás del Traefik compartido.
+
+## Traefik compartido ──► persistence (:8000)
+# MongoDB compartido ──► persistence, a través de mired
+
+# MongoDB, Traefik y la red `mired` son proporcionados por D:\Services.
 #
 # Inicio:
 #     docker compose up --build -d
 #
-# El servicio también se publica en el puerto que espera el orquestador
-# (`PERSISTENCE_BASE_URL = http://localhost:8082`):
+# El servicio también se publica en el host en el puerto que el orquestador
+# espera (`PERSISTENCE_BASE_URL = http://localhost:8082`):
 #     curl http://localhost:8082/health
 #
-# El Traefik compartido lo enruta mediante TLS:
+# El Traefik compartido lo enruta a través de TLS:
 #     curl -k https://persistence.universidad.localhost/health
 #
-# PERSISTENCE_API_TOKEN es el nombre canónico del secreto compartido (también
-# lo usa el orquestador); SERVICE_API_TOKEN se acepta como alias anterior. El
-# valor se obtiene del archivo `.env` junto a este compose.
+# PERSISTENCE_API_TOKEN es el nombre canónico del secreto compartido (el
+# orquestador también lo usa); SERVICE_API_TOKEN todavía se acepta como un alias
+# heredado (legacy). Proviene del archivo `.env` junto a este archivo compose.
 
 services:
   persistence:
@@ -22,11 +25,8 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      # Publicado directamente para el orquestador: PERSISTENCE_BASE_URL apunta
-      # a http://localhost:8082. El Traefik compartido también enruta el servicio.
       - "8082:8000"
     environment:
-      # Nombre canónico del secreto; el alias anterior sigue funcionando como respaldo.
       PERSISTENCE_API_TOKEN: ${PERSISTENCE_API_TOKEN:-${SERVICE_API_TOKEN:?PERSISTENCE_API_TOKEN is required; copy .env.example to .env and set it}}
       MONGO_URI: ${MONGO_URI:?MONGO_URI is required}
       MONGO_DATABASE: ${MONGO_DATABASE:-pdf_extractext}
@@ -44,9 +44,6 @@ services:
     networks:
       - mired
     restart: unless-stopped
-    # Docker envía SIGTERM a uvicorn y espera este tiempo antes de enviar SIGKILL.
-    # Debe superar --timeout-graceful-shutdown de uvicorn (20 s) para que terminen
-    # las solicitudes en curso y se cierre correctamente el pool de Mongo.
     stop_grace_period: 30s
 
 networks:
