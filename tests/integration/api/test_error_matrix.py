@@ -301,7 +301,7 @@ def test_metrics_endpoint_is_not_available() -> None:
 
 
 def test_503_hides_mongo_error(caplog) -> None:
-    message = "private database detail"
+    message = "private token text metadata"
     request_id = "test-105"
     headers = {**AUTH, "X-Request-ID": request_id}
     with _running(find_error=OperationFailure(message)) as client:
@@ -310,7 +310,6 @@ def test_503_hides_mongo_error(caplog) -> None:
     assert response.status_code == 503
     assert response.json()["detail"] == PersistenceError.default_detail
     assert message not in response.text
-    assert (
-        f"operation=find_one request_id={request_id} "
-        f"error_type=OperationFailure error={message}" in caplog.text
-    )
+    assert message not in caplog.text
+    assert f"operation=find_one request_id={request_id}" in caplog.text
+    assert "error_type=OperationFailure" in caplog.text

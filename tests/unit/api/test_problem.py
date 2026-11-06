@@ -159,9 +159,9 @@ async def test_an_unexpected_exception_answers_a_500_that_leaks_nothing():
     assert "RuntimeError" not in response.text
 
 
-async def test_an_unexpected_exception_is_logged_with_its_traceback(caplog):
+async def test_an_unexpected_exception_log_does_not_expose_its_message(caplog):
     async def fail():
-        raise RuntimeError("boom")
+        raise RuntimeError("private token text metadata")
 
     with caplog.at_level(logging.ERROR, logger="app.api.exception_handlers"):
         await send_request(
@@ -170,8 +170,9 @@ async def test_an_unexpected_exception_is_logged_with_its_traceback(caplog):
 
     record = caplog.records[-1]
     assert "/texts" in record.getMessage()
-    assert record.exc_info is not None
-    assert record.exc_info[0] is RuntimeError
+    assert "error_type=RuntimeError" in record.getMessage()
+    assert "private token text metadata" not in caplog.text
+    assert record.exc_info is None
 
 
 async def test_a_service_error_is_answered_by_its_own_class_not_by_the_catch_all():

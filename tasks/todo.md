@@ -555,11 +555,11 @@ Este servicio **cambia** el contrato. Antes de conectarlo:
 **Deps:** — · **Files:** `pyproject.toml`, `Dockerfile`, `docker-compose.yml`, workflow de CI o config de Traefik si existe · **Scope:** Medium
 
 ### Checkpoint 5: documentación y hardening
-- [ ] README/SPEC sin contradicciones.
+- [x] README/SPEC sin contradicciones.
 - [x] Timeouts/pool/retry configurados y probados.
-- [ ] Logs sin token/texto/metadata.
-- [ ] `/readyz` con caché vigente no golpea Mongo.
-- [ ] CI ejecuta lint, formato y cobertura.
+- [x] Logs sin token/texto/metadata.
+- [x] `/readyz` con caché vigente no golpea Mongo.
+- [ ] CI ejecuta lint, formato y cobertura (workflow eliminado).
 
 ---
 

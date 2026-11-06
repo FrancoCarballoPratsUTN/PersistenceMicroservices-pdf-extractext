@@ -56,7 +56,9 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     token = request_id_context.set(request_id)
     try:
         logger.error(
-            "Unhandled error while handling %s", request.url.path, exc_info=exc
+            "Unhandled error while handling %s error_type=%s",
+            request.url.path,
+            type(exc).__name__,
         )
         response = problem_response(InternalError(), instance_of(request))
         response.headers["X-Request-ID"] = request_id

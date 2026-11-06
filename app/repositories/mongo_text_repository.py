@@ -81,11 +81,10 @@ def _to_stored(document: dict[str, Any]) -> StoredText:
 
 def persistence_error(error: PyMongoError, operation: str) -> PersistenceError:
     logger.error(
-        "MongoDB operation failed operation=%s request_id=%s error_type=%s error=%s",
+        "MongoDB operation failed operation=%s request_id=%s error_type=%s",
         operation,
         request_id_context.get() or "-",
         type(error).__name__,
-        error,
     )
     return PersistenceError()
 

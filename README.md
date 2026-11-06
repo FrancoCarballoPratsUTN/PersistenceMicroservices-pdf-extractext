@@ -292,8 +292,10 @@ curl -s http://localhost:8000/readyz
 ```
 
 `/health` no pregunta a MongoDB a propósito: una caída de la base de datos no
-debe sacar el servicio de rotación. `/readyz` sí hace `ping`, y devuelve `503`
-con un documento de problema cuando MongoDB no contesta.
+debe sacar el servicio de rotación. `/readyz` comprueba MongoDB y devuelve `503`
+con un documento de problema cuando no contesta. Reutiliza el resultado del ping
+durante `MONGO_READINESS_CACHE_TTL_SECONDS` (1 segundo por defecto), así que las
+sondas dentro de esa ventana no generan otra consulta a MongoDB.
 
 ### Un error, para ver la forma
 

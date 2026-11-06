@@ -460,6 +460,10 @@ alcanzable, cacheando el ping durante `MONGO_READINESS_CACHE_TTL_SECONDS`
 consistente con el orquestador, que también expone `/healthz` y `/readyz`
 abiertos.
 
+Mientras el resultado está dentro del TTL, las sondas reutilizan ese resultado
+y no envían otro ping a MongoDB. Al vencer el TTL, la siguiente sonda actualiza
+la caché.
+
 ### 3.2 Autenticación
 
 ```
@@ -690,6 +694,13 @@ orquestador decide si vuelve a enviar la petición.
 Los logs de éxito de creación, actualización y borrado incluyen la operación,
 el resultado, el `request_id` y un hash truncado del checksum. No incluyen el
 contenido ni la metadata del documento.
+
+Los logs de autenticación y acceso registran la ruta sin query string, por lo
+que no exponen el checksum ni el token. Los errores de Mongo y las excepciones
+inesperadas se registran con operación o ruta, `request_id` y tipo de error;
+no se registra el mensaje del driver ni el traceback, que podrían contener
+credenciales o datos de la petición. La respuesta HTTP también conserva un
+detalle genérico para errores internos.
 
 ### 5.5 Arranque
 
