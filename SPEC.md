@@ -534,11 +534,12 @@ class TextRepository(Protocol):
     async def get_by_checksum(self, checksum: str) -> StoredText | None: ...
     async def update(self, checksum: str, changes: TextChanges) -> StoredText | None: ...
     async def delete(self, checksum: str) -> bool: ...
-    async def ping(self) -> bool: ...
 ```
 
 `Protocol` estructural en vez de `ABC`: la Capa 2 no importa nada de la Capa 3,
 y el `FakeTextRepository` de tests cumple el contrato sin herencia.
+La sonda de disponibilidad ejecuta `ping` a través de `MongoConnection`, fuera
+del puerto `TextRepository`.
 
 ### 4.2 Reglas de negocio
 

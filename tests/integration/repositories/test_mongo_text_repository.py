@@ -90,14 +90,6 @@ async def test_get_by_checksum_returns_none_when_absent() -> None:
     assert await repo.get_by_checksum("nope") is None
 
 
-async def test_count_counts_every_stored_text() -> None:
-    repo = await _make_repo()
-    await repo.insert(_stored("a", "t"))
-    await repo.insert(_stored("b", "t"))
-
-    assert await repo.count() == 2
-
-
 async def test_inserting_the_same_checksum_twice_raises() -> None:
     repo = await _make_repo()
     await repo.insert(_stored("dup"))

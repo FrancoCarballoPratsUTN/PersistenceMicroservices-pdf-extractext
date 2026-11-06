@@ -23,7 +23,6 @@ class FakeTextRepository:
             "get_by_checksum": 0,
             "update": 0,
             "delete": 0,
-            "count": 0,
         }
         self.should_fail_duplicate: bool = False
         self.should_fail_too_large: bool = False
@@ -81,10 +80,6 @@ class FakeTextRepository:
             del self._store[checksum]
             return True
         return False
-
-    async def count(self) -> int:
-        self.calls["count"] += 1
-        return len(self._store)
 
 
 def _structural_check() -> None:

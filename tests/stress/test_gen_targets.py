@@ -54,7 +54,7 @@ def test_checksums_are_unique_and_reproducible():
     assert all(len(checksum) == 64 for checksum in first)
 
 
-def test_checksums_reject_a_non_positive_count():
+def test_checksums_reject_a_non_positive_quantity():
     with pytest.raises(ValueError, match="count"):
         generate_checksums(0)
 

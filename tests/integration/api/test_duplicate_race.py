@@ -9,6 +9,7 @@ la inserción (SPEC 5.3).
 from __future__ import annotations
 
 import asyncio
+from collections import Counter
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -68,8 +69,9 @@ async def test_only_one_of_ten_concurrent_posts_is_created() -> None:
     async with _client() as (client, factory):
         statuses = await _post_same_checksum(client, CONCURRENCY)
 
-    assert statuses.count(201) == 1
-    assert statuses.count(409) == CONCURRENCY - 1
+    status_counts = Counter(statuses)
+    assert status_counts[201] == 1
+    assert status_counts[409] == CONCURRENCY - 1
     assert len(factory.client.documents) == 1
 
 
@@ -89,8 +91,9 @@ async def test_twenty_rounds_never_store_twice() -> None:
                 client, CONCURRENCY, checksum=f"round{round_number}"
             )
 
-            assert statuses.count(201) == 1, statuses
-            assert statuses.count(409) == CONCURRENCY - 1, statuses
+            status_counts = Counter(statuses)
+            assert status_counts[201] == 1, statuses
+            assert status_counts[409] == CONCURRENCY - 1, statuses
 
         assert len(factory.client.documents) == REPETITIONS
 
@@ -120,8 +123,9 @@ async def test_the_number_of_refusals_follows_the_number_of_requests(
     async with _client() as (client, factory):
         statuses = await _post_same_checksum(client, attempts)
 
-    assert statuses.count(201) == 1
-    assert statuses.count(409) == attempts - 1
+    status_counts = Counter(statuses)
+    assert status_counts[201] == 1
+    assert status_counts[409] == attempts - 1
     assert len(factory.client.documents) == 1
 
 

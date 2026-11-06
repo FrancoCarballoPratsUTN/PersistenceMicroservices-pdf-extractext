@@ -449,9 +449,9 @@ Este servicio **cambia** el contrato. Antes de conectarlo:
 ## Phase 4: Calidad de código y datos
 
 ### R11: Eliminar `count()` del puerto, repositorio, fake y tests
-- [ ] Quitar `count()` de producción, fake y tests.
-- [ ] Resolver drift `ping`/`count` en SPEC.
-- [ ] Suite verde.
+- [x] Quitar `count()` de producción, fake y tests.
+- [x] Resolver drift `ping`/`count` en SPEC.
+- [x] Suite verde.
 
 **AC:** sin código muerto · SPEC y código coinciden.
 **Verify:** `rg "count\\(" app tests` · `uv run pytest tests/unit/use_cases/test_ports.py tests/integration/repositories/test_mongo_text_repository.py`.

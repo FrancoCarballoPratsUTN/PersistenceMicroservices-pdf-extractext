@@ -131,10 +131,6 @@ class MongoTextRepository:
             raise persistence_error(error, "delete") from error
         return result.deleted_count == 1
 
-    async def count(self) -> int:
-        """Devuelve cuántos textos hay almacenados."""
-        return await self._collection.count_documents({})
-
     async def _find_one(
         self, query: dict[str, Any], projection: dict[str, Any] | None = None
     ) -> dict[str, Any] | None:

@@ -15,11 +15,14 @@ async def test_fake_is_structural_subtype_of_protocol() -> None:
     assert isinstance(repo, TextRepository)
 
 
+def test_count_is_not_part_of_the_repository_contract() -> None:
+    assert not hasattr(TextRepository, "count")
+    assert not hasattr(FakeTextRepository(), "count")
+
+
 async def test_fake_starts_empty() -> None:
     """Empieza sin documentos."""
     repo = FakeTextRepository()
-    repo.calls["count"] = 0
-    assert await repo.count() == 0
     assert await repo.checksum_exists("abc") is False
     assert await repo.get_by_checksum("abc") is None
 
@@ -36,7 +39,6 @@ async def test_insert_and_get() -> None:
         metadata={"name": "test"},
     )
     await repo.insert(item)
-    assert await repo.count() == 1
     assert await repo.checksum_exists("abc123") is True
     got = await repo.get_by_checksum("abc123")
     assert got is not None
@@ -96,13 +98,11 @@ async def test_calls_counters_track_invocations() -> None:
     await repo.get_by_checksum("abc123")
     await repo.update("abc123", TextChanges(metadata=None))
     await repo.delete("abc123")
-    await repo.count()
     assert repo.calls["insert"] >= 1
     assert repo.calls["checksum_exists"] >= 1
     assert repo.calls["get_by_checksum"] >= 1
     assert repo.calls["update"] >= 1
     assert repo.calls["delete"] >= 1
-    assert repo.calls["count"] >= 1
 
 
 async def test_duplicate_barrier_raises_domain_error() -> None:
