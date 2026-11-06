@@ -421,6 +421,7 @@ PersistenceMicroservices-pdf-extractext/
 | `MONGO_TIMEOUT_MS` | `int` | `5000` | timeout de operaciones Mongo |
 | `MONGO_SOCKET_TIMEOUT_MS` | `int` | `5000` | espera máxima de respuesta por socket |
 | `MONGO_MAX_POOL_SIZE` | `int` | `100` | máximo de conexiones simultáneas del pool |
+| `MONGO_READINESS_CACHE_TTL_SECONDS` | `int` | `1` | segundos de caché del ping de `/readyz` |
 | `MAX_TEXT_BODY_BYTES` | `int` | `10485760` (10 MiB) | límite del body (riesgo B) |
 | `LOG_LEVEL` | `str` | `INFO` | nivel mínimo del logging del servicio |
 | `CORS_ALLOW_ORIGINS` | `str` | vacío | orígenes CORS permitidos, separados por coma |
@@ -443,7 +444,7 @@ contrato HTTP y viven en `app/errors.py`.
 
 ```
 ABIERTO   GET    /health    → 200 {"status":"ok"}
-ABIERTO   GET    /readyz    → 200 {"status":"ok","mongo":"ok"}   (hace ping)
+ABIERTO   GET    /readyz    → 200 {"status":"ok","mongo":"ok"}   (ping con caché)
 PROTEGIDO POST   /texts                              Content-Type: application/json
 PROTEGIDO GET    /texts?checksum=<valor>
 PROTEGIDO PUT    /texts?checksum=<valor>            Content-Type: application/json
@@ -454,7 +455,8 @@ No existe endpoint de métricas: `GET /metrics` responde `404`.
 
 `/health` y `/readyz` quedan abiertos para sondas de plataforma (k8s, load
 balancers) que no pueden llevar credenciales. `/readyz` revela si Mongo está
-alcanzable, que es información aceptable en un entorno de red interna y
+alcanzable, cacheando el ping durante `MONGO_READINESS_CACHE_TTL_SECONDS`
+(un segundo por defecto), que es información aceptable en un entorno de red interna y
 consistente con el orquestador, que también expone `/healthz` y `/readyz`
 abiertos.
 
@@ -684,6 +686,10 @@ El cliente usa `timeoutMS` y `socketTimeoutMS` explícitos, además de
 lecturas compatibles; `retryWrites=False` desactiva los reintentos automáticos de
 escrituras. La aplicación tampoco reintenta escrituras: ante un error, el
 orquestador decide si vuelve a enviar la petición.
+
+Los logs de éxito de creación, actualización y borrado incluyen la operación,
+el resultado, el `request_id` y un hash truncado del checksum. No incluyen el
+contenido ni la metadata del documento.
 
 ### 5.5 Arranque
 

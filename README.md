@@ -28,12 +28,17 @@ dos; sin token el proceso no arranca (SPEC 2.5).
 | `MONGO_TIMEOUT_MS` | `5000` | Límite total de duración de cada operación contra Mongo. |
 | `MONGO_SOCKET_TIMEOUT_MS` | `5000` | Tiempo máximo esperando respuesta por socket. |
 | `MONGO_MAX_POOL_SIZE` | `100` | Máximo de conexiones simultáneas del pool. |
+| `MONGO_READINESS_CACHE_TTL_SECONDS` | `1` | Segundos que `/readyz` reutiliza el último ping. |
 | `MAX_TEXT_BODY_BYTES` | `10485760` | Tamaño máximo del body (10 MiB). |
 | `LOG_LEVEL` | `INFO` | Nivel mínimo del logging (`DEBUG`, `INFO`, `WARNING`, ...). |
 | `CORS_ALLOW_ORIGINS` | vacío | Orígenes permitidos, separados por coma. Vacío = CORS cerrado. |
 
 Un valor numérico que no sea un entero positivo detiene el arranque: un timeout o
 un límite de tamaño en cero desactivaría el límite en silencio.
+
+Los logs de creación, actualización y borrado incluyen operación, `request_id`
+y un hash corto del checksum. No registran el contenido ni la metadata. `/readyz`
+reutiliza el resultado del último ping durante el TTL configurado.
 
 El driver puede reintentar lecturas compatibles una vez. Las escrituras
 automáticas están desactivadas (`retryWrites=False`) y la aplicación no reintenta

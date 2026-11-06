@@ -7,16 +7,21 @@ marcas de tiempo que las acompañan; la persistencia se queda detrás del puerto
 
 from __future__ import annotations
 
+import hashlib
+import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 
 from app.errors import ChecksumAlreadyExistsError, TextNotFoundError
+from app.request_context import request_id_context
 from app.use_cases.ports import (
     CreateTextCommand,
     StoredText,
     TextChanges,
     TextRepository,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class TextService:
@@ -65,6 +70,12 @@ class TextService:
                 updated_at=now,
             )
         )
+        logger.info(
+            "resource_changed operation=create result=success "
+            "checksum_hash=%s request_id=%s",
+            hashlib.sha256(command.checksum.encode("utf-8")).hexdigest()[:12],
+            request_id_context.get() or "-",
+        )
 
     async def find_by_checksum(self, checksum: str) -> StoredText:
         """Devuelve el texto almacenado.
@@ -110,6 +121,12 @@ class TextService:
         item = await self._repository.update(checksum, changes)
         if item is None:
             raise TextNotFoundError(f"no text with checksum {checksum!r}")
+        logger.info(
+            "resource_changed operation=update result=success "
+            "checksum_hash=%s request_id=%s",
+            hashlib.sha256(checksum.encode("utf-8")).hexdigest()[:12],
+            request_id_context.get() or "-",
+        )
         return item
 
     async def delete(self, checksum: str) -> None:
@@ -127,3 +144,9 @@ class TextService:
         """
         if not await self._repository.delete(checksum):
             raise TextNotFoundError(f"no text with checksum {checksum!r}")
+        logger.info(
+            "resource_changed operation=delete result=success "
+            "checksum_hash=%s request_id=%s",
+            hashlib.sha256(checksum.encode("utf-8")).hexdigest()[:12],
+            request_id_context.get() or "-",
+        )

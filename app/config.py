@@ -81,6 +81,7 @@ class Settings:
     mongo_timeout_ms: int = 5000
     mongo_socket_timeout_ms: int = 5000
     mongo_max_pool_size: int = 100
+    mongo_readiness_cache_ttl_seconds: int = 1
     max_text_body_bytes: int = 10485760
     log_level: str = "INFO"
     cors_allow_origins: tuple[str, ...] = ()
@@ -117,6 +118,11 @@ def get_settings(environ: Mapping[str, str] | None = None) -> Settings:
             environ.get("MONGO_MAX_POOL_SIZE"),
             "MONGO_MAX_POOL_SIZE",
             100,
+        ),
+        mongo_readiness_cache_ttl_seconds=_positive_integer(
+            environ.get("MONGO_READINESS_CACHE_TTL_SECONDS"),
+            "MONGO_READINESS_CACHE_TTL_SECONDS",
+            1,
         ),
         max_text_body_bytes=_positive_integer(
             environ.get("MAX_TEXT_BODY_BYTES"),

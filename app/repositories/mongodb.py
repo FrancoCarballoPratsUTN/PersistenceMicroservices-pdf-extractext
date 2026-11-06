@@ -7,6 +7,7 @@ importa pymongo.
 
 import logging
 from collections.abc import Callable
+from time import monotonic
 from typing import Any
 from urllib.parse import unquote, urlsplit
 
@@ -44,6 +45,8 @@ class MongoConnection:
         self._settings = settings
         self._client_factory = client_factory
         self._client: AsyncMongoClient | None = None
+        self._last_readiness_check: float | None = None
+        self._last_availability: bool | None = None
 
     async def start(self) -> bool:
         """Abre la conexión y comprueba que MongoDB responde.
@@ -54,6 +57,8 @@ class MongoConnection:
         """
         timeout = self._settings.mongo_timeout_ms
         uri = self._settings.mongo_uri
+        self._last_readiness_check = None
+        self._last_availability = None
         self._client = self._client_factory(
             uri,
             timeoutMS=timeout,
@@ -93,11 +98,24 @@ class MongoConnection:
         """Pregunta a MongoDB si está. Nunca lanza, nunca se bloquea eternamente."""
         if self._client is None:
             return False
+        now = monotonic()
+        ttl = self._settings.mongo_readiness_cache_ttl_seconds
+        if (
+            self._last_readiness_check is not None
+            and now - self._last_readiness_check < ttl
+        ):
+            return bool(self._last_availability)
+
         try:
             await self._database().command("ping")
         except PyMongoError:
-            return False
-        return True
+            available = False
+        else:
+            available = True
+
+        self._last_readiness_check = now
+        self._last_availability = available
+        return available
 
     def _database(self) -> Any:
         return self._client[self._settings.mongo_database]

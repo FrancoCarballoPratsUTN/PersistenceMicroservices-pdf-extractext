@@ -13,6 +13,7 @@ import httpx
 import pytest
 from pymongo.errors import OperationFailure
 
+import app.repositories.mongodb as mongodb
 from app.config import Settings
 from app.repositories.mongodb import MongoConnection
 from tests.fakes.fake_mongo_client import FakeMongoClientFactory
@@ -277,6 +278,28 @@ async def test_readyz_reports_ok_when_mongo_answers() -> None:
 
     assert ready.status_code == 200
     assert ready.json() == {"status": "ok", "mongo": "ok"}
+
+
+async def test_readyz_reuses_ping_until_cache_expires(monkeypatch) -> None:
+    from app.main import create_app
+
+    current_time = 10.0
+    monkeypatch.setattr(mongodb, "monotonic", lambda: current_time)
+    factory = FakeMongoClientFactory()
+    settings = build_settings(mongo_readiness_cache_ttl_seconds=1)
+    connection = MongoConnection(settings, client_factory=factory)
+    app = create_app(settings, connection=connection)
+
+    async with running_app(app) as client:
+        assert factory.client.pings == 1  # ping de inicio
+        assert (await client.get("/readyz")).status_code == 200
+        assert (await client.get("/readyz")).status_code == 200
+        assert factory.client.pings == 1
+
+        current_time += 1.1
+        assert (await client.get("/readyz")).status_code == 200
+
+    assert factory.client.pings == 2
 
 
 async def test_health_answers_even_when_mongo_is_down() -> None:

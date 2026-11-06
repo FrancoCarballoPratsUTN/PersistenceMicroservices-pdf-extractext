@@ -531,11 +531,11 @@ Este servicio **cambia** el contrato. Antes de conectarlo:
 **Deps:** R6, R11 · **Files:** `app/config.py`, `app/repositories/mongodb.py`, `.env.example`, `tests/unit/test_config.py`, `README.md` · **Scope:** Medium
 
 ### R18: Logging de producción sin PII y readiness con caché
-- [ ] Create/update/delete con log de negocio y `request_id`.
-- [ ] Checksum seguro (truncado/hash); sin texto ni metadata.
-- [ ] Errores de persistencia con operación y `request_id`.
-- [ ] `/readyz` cachea el ping con TTL configurable (default 1 s).
-- [ ] Tests de logs y caché.
+- [x] Create/update/delete con log de negocio y `request_id`.
+- [x] Checksum seguro (truncado/hash); sin texto ni metadata.
+- [x] Errores de persistencia con operación y `request_id`.
+- [x] `/readyz` cachea el ping con TTL configurable (default 1 s).
+- [x] Tests de logs y caché.
 
 **AC:** observabilidad sin PII · readiness no golpea Mongo en cada sonda.
 **Verify:** `uv run pytest tests/unit/services/test_text_service.py -k "log"` · `uv run pytest tests/unit/test_mongodb_lifecycle.py -k "readyz"` · `uv run pytest tests/unit/test_logging_setup.py` · `rg "logger.*text|logger.*metadata|logger.*token" app` sin resultados.

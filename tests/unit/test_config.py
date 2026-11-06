@@ -28,6 +28,7 @@ ALL_VARIABLES = (
     "MONGO_TIMEOUT_MS",
     "MONGO_SOCKET_TIMEOUT_MS",
     "MONGO_MAX_POOL_SIZE",
+    "MONGO_READINESS_CACHE_TTL_SECONDS",
     "MAX_TEXT_BODY_BYTES",
     "LOG_LEVEL",
     "CORS_ALLOW_ORIGINS",
@@ -64,6 +65,7 @@ def test_the_documented_defaults_apply_when_only_the_token_is_set(token):
     assert settings.mongo_timeout_ms == 5000
     assert settings.mongo_socket_timeout_ms == 5000
     assert settings.mongo_max_pool_size == 100
+    assert settings.mongo_readiness_cache_ttl_seconds == 1
     assert settings.max_text_body_bytes == 10485760
     assert settings.log_level == "INFO"
     assert settings.cors_allow_origins == ()
@@ -87,6 +89,7 @@ def test_injected_values_can_set_configuration_without_environment(monkeypatch):
         "MONGO_TIMEOUT_MS": "250",
         "MONGO_SOCKET_TIMEOUT_MS": "750",
         "MONGO_MAX_POOL_SIZE": "25",
+        "MONGO_READINESS_CACHE_TTL_SECONDS": "2",
     }
 
     settings = get_settings(values)
@@ -96,6 +99,7 @@ def test_injected_values_can_set_configuration_without_environment(monkeypatch):
     assert settings.mongo_timeout_ms == 250
     assert settings.mongo_socket_timeout_ms == 750
     assert settings.mongo_max_pool_size == 25
+    assert settings.mongo_readiness_cache_ttl_seconds == 2
 
 
 def test_injected_values_require_a_token_even_if_environment_has_one(monkeypatch):
@@ -144,6 +148,7 @@ def test_every_documented_default_matches_the_spec_table(token):
         "MONGO_TIMEOUT_MS": settings.mongo_timeout_ms,
         "MONGO_SOCKET_TIMEOUT_MS": settings.mongo_socket_timeout_ms,
         "MONGO_MAX_POOL_SIZE": settings.mongo_max_pool_size,
+        "MONGO_READINESS_CACHE_TTL_SECONDS": settings.mongo_readiness_cache_ttl_seconds,
         "MAX_TEXT_BODY_BYTES": settings.max_text_body_bytes,
         "LOG_LEVEL": settings.log_level,
         "CORS_ALLOW_ORIGINS": settings.cors_allow_origins,
@@ -157,6 +162,7 @@ def test_every_documented_default_matches_the_spec_table(token):
         "MONGO_TIMEOUT_MS": 5000,
         "MONGO_SOCKET_TIMEOUT_MS": 5000,
         "MONGO_MAX_POOL_SIZE": 100,
+        "MONGO_READINESS_CACHE_TTL_SECONDS": 1,
         "MAX_TEXT_BODY_BYTES": 10485760,
         "LOG_LEVEL": "INFO",
         "CORS_ALLOW_ORIGINS": (),
@@ -303,6 +309,7 @@ def test_settings_expose_exactly_the_documented_variables(token):
         "mongo_timeout_ms",
         "mongo_socket_timeout_ms",
         "mongo_max_pool_size",
+        "mongo_readiness_cache_ttl_seconds",
         "max_text_body_bytes",
         "log_level",
         "cors_allow_origins",

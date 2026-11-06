@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
 import pytest
 
 from app.errors import ChecksumAlreadyExistsError, PersistenceError, TextNotFoundError
+from app.request_context import request_id_context
 from app.services.text_service import TextService
 from app.use_cases.ports import CreateTextCommand, TextChanges
 from tests.fakes.fake_text_repository import FakeTextRepository
@@ -23,6 +26,45 @@ def _command(**changes: Any) -> CreateTextCommand:
     fields: dict[str, Any] = {"checksum": "abc123", "text": "hello"}
     fields.update(changes)
     return CreateTextCommand(**fields)
+
+
+async def test_create_log_has_request_id_and_safe_checksum(caplog) -> None:
+    context_token = request_id_context.set("request-123")
+    command = _command(text="private body", metadata={"secret": "private data"})
+
+    try:
+        with caplog.at_level(logging.INFO, logger="app.services.text_service"):
+            await _service(FakeTextRepository()).create(command)
+
+        message = caplog.text
+        assert "request_id=request-123" in message
+        assert "result=success" in message
+        assert hashlib.sha256(b"abc123").hexdigest()[:12] in message
+        assert "abc123" not in message
+        assert "private body" not in message
+        assert "private data" not in message
+    finally:
+        request_id_context.reset(context_token)
+
+
+async def test_update_and_delete_logs_have_request_id(caplog) -> None:
+    repository = FakeTextRepository()
+    service = _service(repository)
+    await service.create(_command())
+    context_token = request_id_context.set("request-456")
+
+    try:
+        with caplog.at_level(logging.INFO, logger="app.services.text_service"):
+            await service.update("abc123", TextChanges(name="new name"))
+            await service.delete("abc123")
+
+        assert "operation=update" in caplog.text
+        assert "operation=delete" in caplog.text
+        assert caplog.text.count("result=success") == 2
+        assert caplog.text.count("request_id=request-456") == 2
+        assert "new name" not in caplog.text
+    finally:
+        request_id_context.reset(context_token)
 
 
 async def test_a_new_text_is_stored_with_both_timestamps() -> None:

@@ -61,7 +61,7 @@ def _to_stored(document: dict[str, Any]) -> StoredText:
     if invalid_fields:
         fields = ",".join(invalid_fields)
         logger.error(
-            "MongoDB returned an invalid text document fields=%s request_id=%s",
+            "MongoDB returned an invalid stored document fields=%s request_id=%s",
             fields,
             request_id_context.get() or "-",
         )
