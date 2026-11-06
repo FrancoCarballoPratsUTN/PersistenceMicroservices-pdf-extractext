@@ -64,10 +64,9 @@ def test_openapi_codes_include_nested_errors_without_duplicates():
     codes = _codes()
 
     assert "PAYLOAD_TOO_LARGE" in codes
-    assert codes.count("PAYLOAD_TOO_LARGE") == 1
     assert "INTERMEDIATE_ERROR" in codes
     assert "NESTED_ERROR" in codes
-    assert len(codes) == len(set(codes))
+    assert codes == sorted(set(codes))
 
 
 def test_detail_behavior():

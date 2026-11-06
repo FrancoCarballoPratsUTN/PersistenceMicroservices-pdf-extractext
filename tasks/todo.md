@@ -497,11 +497,11 @@ Este servicio **cambia** el contrato. Antes de conectarlo:
 **Deps:** — · **Files:** `app/api/auth.py`, `tests/unit/api/test_auth.py` · **Scope:** XS
 
 ### Checkpoint 4: calidad
-- [ ] Sin `count()` ni índice `updated_at`.
-- [ ] Documento corrupto no inventa datos.
-- [ ] Enum de códigos completo y sin duplicados.
-- [ ] Token no ASCII ⇒ `401`, no `500`.
-- [ ] `uv run pytest --cov=app --cov-fail-under=85` pasa.
+- [x] Sin `count()` ni índice `updated_at`.
+- [x] Documento corrupto no inventa datos.
+- [x] Enum de códigos completo y sin duplicados.
+- [x] Token no ASCII ⇒ `401`, no `500`.
+- [x] `uv run pytest --cov=app --cov-fail-under=85` pasa.
 
 ---
 
