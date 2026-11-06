@@ -38,6 +38,31 @@ de esa lista.
 
 ## Arranque
 
+### Docker Compose con los servicios compartidos
+
+Este compose levanta sólo `persistence`. MongoDB y Traefik se administran desde
+`D:\Services` y comparten la red externa `mired`. Si todavía no existe, créala
+una vez con `docker network create mired`. Luego, desde PowerShell, inicia los
+servicios compartidos:
+
+```powershell
+docker compose -f D:\Services\mongodb\docker-compose.yml up -d
+docker compose -f D:\Services\traefik\docker-compose.yml up -d
+```
+
+Copia `.env.example` a `.env`, configura el token y `MONGO_URI` con las mismas
+credenciales de MongoDB, usando `mongo` como host. Después, desde esta carpeta,
+inicia Persistencia:
+
+```powershell
+docker compose up --build -d
+```
+
+El servicio queda accesible en `http://localhost:8082` y Traefik lo publica en
+`https://persistence.universidad.localhost`.
+
+### Ejecución local
+
 ```bash
 uv sync
 uv run uvicorn app.main:create_app --factory --port 8000 \
