@@ -542,13 +542,13 @@ Este servicio **cambia** el contrato. Antes de conectarlo:
 **Deps:** R4, R5, R17 · **Files:** `app/logging_setup.py`, `app/services/text_service.py`, `app/repositories/mongodb_text_repository.py`, `app/api/routers/health.py`, tests de servicio/health · **Scope:** Medium
 
 ### R19: CI, cobertura, Docker, borde y auditoría de dependencias
-- [ ] CI ejecuta lint, formato y cobertura ≥ 85.
-- [ ] `uv sync --frozen` y `uv lock --check` en CI.
-- [ ] Sin dependencias no declaradas ni `prometheus_client`.
-- [ ] Docker non-root/healthcheck/graceful shutdown + hardening compatible.
-- [ ] TLS y rate limiting verificados en Traefik o registrados como deuda con owner/umbral/fecha.
-- [ ] Rotación de token documentada como fuera de alcance, con mitigación.
-- [ ] `docker compose config` válido.
+- [ ] CI ejecuta lint, formato y cobertura ≥ 85 (workflow eliminado).
+- [ ] `uv sync --frozen` y `uv lock --check` en CI (workflow eliminado).
+- [x] Árbol resuelto auditado; sin `prometheus_client` en dependencias.
+- [x] Docker non-root/healthcheck/graceful shutdown y hardening compatible.
+- [x] TLS declarado en el router Traefik; rate limiting registrado como deuda con owner, umbral y fecha.
+- [x] Rotación de token documentada fuera de alcance, con mitigación.
+- [x] `docker compose config` válido.
 
 **AC:** gate de calidad automatizado · contenedor endurecido · borde verificado.
 **Verify:** `uv run pytest --cov=app --cov-fail-under=85` · `uv run ruff check . && uv run ruff format --check .` · `docker compose config` · `uv tree` · revisión de Traefik (TLS + rate limit).

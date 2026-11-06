@@ -113,6 +113,33 @@ uv run ruff check .
 uv run ruff format .
 ```
 
+## CI, seguridad y dependencias
+
+Para validar dependencias, ejecutar `uv lock --check`, `uv sync --frozen` y
+`uv tree --locked`; Ruff y pytest se ejecutan con los comandos de la sección
+anterior, incluido el umbral de cobertura del 85 %. El árbol de producción se
+declara en `pyproject.toml`; `uv.lock` fija sus dependencias transitivas. No se
+usa `prometheus_client`. La automatización de CI no está configurada actualmente.
+
+El contenedor se ejecuta como `app`, sólo recibe capacidades descartadas, no
+puede elevar privilegios y usa un filesystem de sólo lectura con `/tmp`
+restringido. Su healthcheck consulta `/health`; Uvicorn recibe `SIGTERM` y
+dispone de 20 segundos para cerrar peticiones y MongoDB, dentro de los 30
+segundos de gracia de Compose.
+
+El router de Traefik solicita el entrypoint `https` y TLS. La configuración de
+Traefik vive en el repositorio externo `D:\Services`, por lo que el rate limit
+no se puede confirmar aquí. Queda como deuda para el owner del servicio de
+plataforma/Traefik: configurar y verificar un límite de 100 solicitudes por
+minuto con burst de 50 para este router antes del 2026-11-20. Hasta entonces,
+la mitigación es mantener autenticación Bearer, límites de tamaño del body y
+timeouts de Mongo; esto no reemplaza rate limiting.
+
+La rotación automática del token queda fuera del alcance de esta release. Como
+mitigación, el owner de despliegue debe reemplazar el secreto en el gestor de
+secretos y reiniciar el servicio en una ventana coordinada, evitando registrar
+el valor; el token anterior deja de ser válido al completar el cambio.
+
 ## Autenticación
 
 Todas las rutas exigen `Authorization: Bearer <token configurado>` salvo

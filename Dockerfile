@@ -1,10 +1,10 @@
-FROM python:3.15-slim AS builder
+FROM python:3.15-alpine AS builder
 
-COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
+# Copiar el binario de uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential \
-    && rm -rf /var/lib/apt/lists/*
+# Instalar herramientas básicas de compilación (equivalente a build-essential)
+RUN apk add --no-cache build-base
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -19,11 +19,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 COPY app ./app
 
-FROM python:3.15-slim AS runtime
 
-RUN apt-get update \
-    && apt-get upgrade -y --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+FROM python:3.15-alpine AS runtime
+
+# Actualizar paquetes del sistema
+RUN apk upgrade --no-cache
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -31,8 +31,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN groupadd --system app \
-    && useradd --system --gid app --home-dir /app --no-create-home app
+# Sintaxis de Alpine para crear usuario y grupo sin privilegios
+RUN addgroup -S app && adduser -S app -G app -h /app -D
 
 COPY --from=builder --chown=app:app /app /app
 
@@ -43,6 +43,6 @@ EXPOSE 8000
 STOPSIGNAL SIGTERM
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
 
 CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--timeout-graceful-shutdown", "20", "--no-access-log"]
