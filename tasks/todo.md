@@ -458,9 +458,9 @@ Este servicio **cambia** el contrato. Antes de conectarlo:
 **Deps:** R2, R6 · **Files:** `app/use_cases/ports.py`, `app/repositories/mongodb_text_repository.py`, `tests/fakes/fake_text_repository.py`, `tests/unit/use_cases/test_ports.py`, `tests/integration/repositories/test_mongo_text_repository.py` · **Scope:** Small
 
 ### R12: Eliminar el índice `updated_at` sin uso
-- [ ] Quitar `create_index("updated_at")`.
-- [ ] Actualizar tests de lifecycle.
-- [ ] `/readyz` sigue funcionando.
+- [x] Quitar `create_index("updated_at")`.
+- [x] Actualizar tests de lifecycle.
+- [x] `/readyz` sigue funcionando.
 
 **AC:** sin índice no usado · `_id` sigue garantizando unicidad.
 **Verify:** `rg "create_index|updated_at" app/repositories/mongodb.py` · `uv run pytest tests/unit/test_mongodb_lifecycle.py`.

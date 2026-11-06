@@ -20,11 +20,10 @@ from pymongo.errors import (
 
 
 class FakeDatabase:
-    """El handle ``client[database]``, que nombra las colecciones que contiene."""
+    """Handle fake de base de datos que entrega colecciones en memoria."""
 
-    def __init__(self, client: FakeMongoClient, name: str) -> None:
+    def __init__(self, client: FakeMongoClient) -> None:
         self._client = client
-        self._name = name
 
     async def command(self, name: str) -> dict[str, Any]:
         """Responde a un comando de base de datos como lo haría un servidor
@@ -34,16 +33,15 @@ class FakeDatabase:
         self._client.pings += 1
         return {"ok": 1}
 
-    def __getitem__(self, collection: str) -> FakeCollection:
-        return FakeCollection(self._client, f"{self._name}.{collection}")
+    def __getitem__(self, _: str) -> FakeCollection:
+        return FakeCollection(self._client)
 
 
 class FakeCollection:
     """El handle ``client[database][collection]``, con las llamadas que hacemos."""
 
-    def __init__(self, client: FakeMongoClient, path: str) -> None:
+    def __init__(self, client: FakeMongoClient) -> None:
         self._client = client
-        self._path = path
 
     async def command(self, name: str) -> dict[str, Any]:
         if self._client.ping_fails:
@@ -54,7 +52,6 @@ class FakeCollection:
     async def create_index(self, key: Any, **kwargs: Any) -> str:
         if self._client.index_fails:
             raise OperationFailure("cannot create the index")
-        self._client.indexes.append((self._path, str(key)))
         return str(key)
 
     async def insert_one(self, document: dict[str, Any]) -> Any:
@@ -155,12 +152,11 @@ class FakeMongoClient:
         self.delete_error = delete_error
         self.close_error = close_error
         self.pings = 0
-        self.indexes: list[tuple[str, str]] = []
         self.documents: dict[Any, dict[str, Any]] = {}
         self.closed = False
 
     def __getitem__(self, database: str) -> FakeDatabase:
-        return FakeDatabase(self, database)
+        return FakeDatabase(self)
 
     async def close(self) -> None:
         """Cierra el cliente, salvo que el test haya pedido que falle al hacerlo."""

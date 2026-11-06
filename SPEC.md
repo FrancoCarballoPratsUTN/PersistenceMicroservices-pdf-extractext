@@ -660,8 +660,8 @@ datos no conoce códigos de estado; la traducción ocurre en la Capa 1.
 ### 5.5 Arranque
 
 En el `lifespan` de FastAPI: validar que `SERVICE_API_TOKEN` esté presente,
-abrir el cliente Mongo, hacer `ping`, y asegurar el índice sobre `updated_at`.
-El índice `_id_` es automático en MongoDB y no requiere acción.
+abrir el cliente Mongo y comprobar disponibilidad con `ping`. MongoDB crea el
+índice único `_id_` automáticamente; el servicio no crea índices secundarios.
 
 ---
 

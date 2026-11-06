@@ -80,15 +80,13 @@ async def test_a_successful_start_reports_mongo_as_available() -> None:
     assert await connection.is_available() is True
 
 
-async def test_the_start_ensures_the_index_on_updated_at() -> None:
-    """El bootstrap crea el índice que pide SPEC 5.5, sobre la colección de
-    textos."""
-    factory = FakeMongoClientFactory()
+async def test_start_succeeds_when_index_creation_is_unavailable() -> None:
+    """El arranque no depende de un índice secundario."""
+    factory = FakeMongoClientFactory(index_fails=True)
     connection = MongoConnection(build_settings(), client_factory=factory)
 
-    await connection.start()
-
-    assert factory.client.indexes == [("texts.texts", "updated_at")]
+    assert await connection.start() is True
+    assert factory.client.pings == 1
 
 
 async def test_a_mongo_that_does_not_answer_lets_the_start_finish() -> None:
@@ -99,16 +97,6 @@ async def test_a_mongo_that_does_not_answer_lets_the_start_finish() -> None:
 
     assert await connection.start() is False
     assert await connection.is_available() is False
-
-
-async def test_a_failed_index_lets_the_start_finish() -> None:
-    """Un bootstrap que no puede terminar también se informa, en vez de matar la
-    app."""
-    connection = MongoConnection(
-        build_settings(), client_factory=FakeMongoClientFactory(index_fails=True)
-    )
-
-    assert await connection.start() is False
 
 
 async def test_a_dead_mongo_is_reported_in_the_log(

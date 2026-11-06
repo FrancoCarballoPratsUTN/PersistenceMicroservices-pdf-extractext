@@ -46,13 +46,11 @@ class MongoConnection:
         self._client: AsyncMongoClient | None = None
 
     async def start(self) -> bool:
-        """Abre la conexión, comprueba MongoDB y prepara el índice de textos.
+        """Abre la conexión y comprueba que MongoDB responde.
 
         Returns:
-            True cuando MongoDB ha respondido y el índice está en su sitio.
-            False cuando ha fallado cualquiera de los dos pasos: el servicio
-            tiene que seguir en pie y dejar que /readyz lo informe, así que no
-            se lanza nada.
+            True cuando MongoDB ha respondido. False cuando no está disponible;
+            el servicio sigue en pie y /readyz informa del fallo.
         """
         timeout = self._settings.mongo_timeout_ms
         uri = self._settings.mongo_uri
@@ -65,13 +63,6 @@ class MongoConnection:
         if not await self.is_available():
             logger.warning(
                 "MongoDB did not answer during start-up; /readyz reports unavailable."
-            )
-            return False
-        try:
-            await self.texts().create_index("updated_at")
-        except PyMongoError as error:
-            logger.warning(
-                "The updated_at index could not be prepared: %s", type(error).__name__
             )
             return False
         return True
