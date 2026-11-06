@@ -56,8 +56,12 @@ class MongoConnection:
         uri = self._settings.mongo_uri
         self._client = self._client_factory(
             uri,
+            timeoutMS=timeout,
             serverSelectionTimeoutMS=timeout,
             connectTimeoutMS=timeout,
+            socketTimeoutMS=self._settings.mongo_socket_timeout_ms,
+            maxPoolSize=self._settings.mongo_max_pool_size,
+            retryWrites=False,
         )
         logger.debug("MongoDB connection prepared with uri=%s", _redact_uri(uri))
         if not await self.is_available():

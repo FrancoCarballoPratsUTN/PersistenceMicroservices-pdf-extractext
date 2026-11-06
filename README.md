@@ -25,13 +25,20 @@ dos; sin token el proceso no arranca (SPEC 2.5).
 | `MONGO_URI` | Local: `mongodb://localhost:27017`; Compose: obligatoria | Cadena de conexión. |
 | `MONGO_DATABASE` | `pdf_extractext` | Base de datos. |
 | `MONGO_TEXTS_COLLECTION` | `texts` | Colección que guarda los documentos. |
-| `MONGO_TIMEOUT_MS` | `5000` | Timeout de cada operación contra Mongo. |
+| `MONGO_TIMEOUT_MS` | `5000` | Límite total de duración de cada operación contra Mongo. |
+| `MONGO_SOCKET_TIMEOUT_MS` | `5000` | Tiempo máximo esperando respuesta por socket. |
+| `MONGO_MAX_POOL_SIZE` | `100` | Máximo de conexiones simultáneas del pool. |
 | `MAX_TEXT_BODY_BYTES` | `10485760` | Tamaño máximo del body (10 MiB). |
 | `LOG_LEVEL` | `INFO` | Nivel mínimo del logging (`DEBUG`, `INFO`, `WARNING`, ...). |
 | `CORS_ALLOW_ORIGINS` | vacío | Orígenes permitidos, separados por coma. Vacío = CORS cerrado. |
 
 Un valor numérico que no sea un entero positivo detiene el arranque: un timeout o
 un límite de tamaño en cero desactivaría el límite en silencio.
+
+El driver puede reintentar lecturas compatibles una vez. Las escrituras
+automáticas están desactivadas (`retryWrites=False`) y la aplicación no reintenta
+escrituras: así evita repetir operaciones no idempotentes. Ante un error, el
+orquestador decide si vuelve a enviar la petición.
 
 CORS está cerrado por defecto: no se instala `CORSMiddleware` salvo que
 `CORS_ALLOW_ORIGINS` declare una lista explícita. El comodín `*` se rechaza al

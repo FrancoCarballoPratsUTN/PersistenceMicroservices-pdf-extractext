@@ -79,6 +79,8 @@ class Settings:
     mongo_database: str = "pdf_extractext"
     mongo_texts_collection: str = "texts"
     mongo_timeout_ms: int = 5000
+    mongo_socket_timeout_ms: int = 5000
+    mongo_max_pool_size: int = 100
     max_text_body_bytes: int = 10485760
     log_level: str = "INFO"
     cors_allow_origins: tuple[str, ...] = ()
@@ -105,6 +107,16 @@ def get_settings(environ: Mapping[str, str] | None = None) -> Settings:
             environ.get("MONGO_TIMEOUT_MS"),
             "MONGO_TIMEOUT_MS",
             5000,
+        ),
+        mongo_socket_timeout_ms=_positive_integer(
+            environ.get("MONGO_SOCKET_TIMEOUT_MS"),
+            "MONGO_SOCKET_TIMEOUT_MS",
+            5000,
+        ),
+        mongo_max_pool_size=_positive_integer(
+            environ.get("MONGO_MAX_POOL_SIZE"),
+            "MONGO_MAX_POOL_SIZE",
+            100,
         ),
         max_text_body_bytes=_positive_integer(
             environ.get("MAX_TEXT_BODY_BYTES"),

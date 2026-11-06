@@ -520,11 +520,11 @@ Este servicio **cambia** el contrato. Antes de conectarlo:
 **Deps:** R1–R15 · **Files:** `README.md`, `SPEC.md` · **Scope:** Small
 
 ### R17: Timeouts, pool y política de retry de Mongo
-- [ ] `Settings` con `mongo_socket_timeout_ms` y `mongo_max_pool_size`.
-- [ ] `AsyncMongoClient` recibe `timeoutMS`/`socketTimeoutMS` y `maxPoolSize`.
-- [ ] `.env.example` y README documentan las variables.
-- [ ] Tests de que los valores llegan al cliente.
-- [ ] Política de retry escrita; no reintentar escrituras no idempotentes.
+- [x] `Settings` con `mongo_socket_timeout_ms` y `mongo_max_pool_size`.
+- [x] `AsyncMongoClient` recibe `timeoutMS`/`socketTimeoutMS` y `maxPoolSize`.
+- [x] `.env.example` y README documentan las variables.
+- [x] Tests de que los valores llegan al cliente.
+- [x] Política de retry escrita; no reintentar escrituras no idempotentes.
 
 **AC:** timeouts explícitos · pool configurable · retry seguro.
 **Verify:** `uv run pytest tests/unit/test_config.py tests/unit/test_mongodb_lifecycle.py` · `rg "timeoutMS|socketTimeoutMS|maxPoolSize" app .env.example README.md`.
@@ -556,7 +556,7 @@ Este servicio **cambia** el contrato. Antes de conectarlo:
 
 ### Checkpoint 5: documentación y hardening
 - [ ] README/SPEC sin contradicciones.
-- [ ] Timeouts/pool/retry configurados y probados.
+- [x] Timeouts/pool/retry configurados y probados.
 - [ ] Logs sin token/texto/metadata.
 - [ ] `/readyz` con caché vigente no golpea Mongo.
 - [ ] CI ejecuta lint, formato y cobertura.

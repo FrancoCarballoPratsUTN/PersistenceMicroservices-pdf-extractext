@@ -419,6 +419,8 @@ PersistenceMicroservices-pdf-extractext/
 | `MONGO_DATABASE` | `str` | `pdf_extractext` | base de datos |
 | `MONGO_TEXTS_COLLECTION` | `str` | `texts` | colección |
 | `MONGO_TIMEOUT_MS` | `int` | `5000` | timeout de operaciones Mongo |
+| `MONGO_SOCKET_TIMEOUT_MS` | `int` | `5000` | espera máxima de respuesta por socket |
+| `MONGO_MAX_POOL_SIZE` | `int` | `100` | máximo de conexiones simultáneas del pool |
 | `MAX_TEXT_BODY_BYTES` | `int` | `10485760` (10 MiB) | límite del body (riesgo B) |
 | `LOG_LEVEL` | `str` | `INFO` | nivel mínimo del logging del servicio |
 | `CORS_ALLOW_ORIGINS` | `str` | vacío | orígenes CORS permitidos, separados por coma |
@@ -675,6 +677,13 @@ datos no conoce códigos de estado; la traducción ocurre en la Capa 1.
 
 > `PersistenceError` se traduce a `503` y no a `500`. Si MongoDB no está
 > disponible, el orquestador puede reintentar la operación.
+
+El cliente usa `timeoutMS` y `socketTimeoutMS` explícitos, además de
+`serverSelectionTimeoutMS` y `connectTimeoutMS` derivados de `MONGO_TIMEOUT_MS`.
+`maxPoolSize` se configura con `MONGO_MAX_POOL_SIZE`. El driver puede reintentar
+lecturas compatibles; `retryWrites=False` desactiva los reintentos automáticos de
+escrituras. La aplicación tampoco reintenta escrituras: ante un error, el
+orquestador decide si vuelve a enviar la petición.
 
 ### 5.5 Arranque
 

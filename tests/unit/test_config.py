@@ -26,6 +26,8 @@ ALL_VARIABLES = (
     "MONGO_DATABASE",
     "MONGO_TEXTS_COLLECTION",
     "MONGO_TIMEOUT_MS",
+    "MONGO_SOCKET_TIMEOUT_MS",
+    "MONGO_MAX_POOL_SIZE",
     "MAX_TEXT_BODY_BYTES",
     "LOG_LEVEL",
     "CORS_ALLOW_ORIGINS",
@@ -60,6 +62,8 @@ def test_the_documented_defaults_apply_when_only_the_token_is_set(token):
     assert settings.mongo_database == "pdf_extractext"
     assert settings.mongo_texts_collection == "texts"
     assert settings.mongo_timeout_ms == 5000
+    assert settings.mongo_socket_timeout_ms == 5000
+    assert settings.mongo_max_pool_size == 100
     assert settings.max_text_body_bytes == 10485760
     assert settings.log_level == "INFO"
     assert settings.cors_allow_origins == ()
@@ -81,6 +85,8 @@ def test_injected_values_can_set_configuration_without_environment(monkeypatch):
         "PERSISTENCE_API_TOKEN": "injected-token",
         "MONGO_DATABASE": "injected-database",
         "MONGO_TIMEOUT_MS": "250",
+        "MONGO_SOCKET_TIMEOUT_MS": "750",
+        "MONGO_MAX_POOL_SIZE": "25",
     }
 
     settings = get_settings(values)
@@ -88,6 +94,8 @@ def test_injected_values_can_set_configuration_without_environment(monkeypatch):
     assert settings.service_api_token == "injected-token"
     assert settings.mongo_database == "injected-database"
     assert settings.mongo_timeout_ms == 250
+    assert settings.mongo_socket_timeout_ms == 750
+    assert settings.mongo_max_pool_size == 25
 
 
 def test_injected_values_require_a_token_even_if_environment_has_one(monkeypatch):
@@ -134,6 +142,8 @@ def test_every_documented_default_matches_the_spec_table(token):
         "MONGO_DATABASE": settings.mongo_database,
         "MONGO_TEXTS_COLLECTION": settings.mongo_texts_collection,
         "MONGO_TIMEOUT_MS": settings.mongo_timeout_ms,
+        "MONGO_SOCKET_TIMEOUT_MS": settings.mongo_socket_timeout_ms,
+        "MONGO_MAX_POOL_SIZE": settings.mongo_max_pool_size,
         "MAX_TEXT_BODY_BYTES": settings.max_text_body_bytes,
         "LOG_LEVEL": settings.log_level,
         "CORS_ALLOW_ORIGINS": settings.cors_allow_origins,
@@ -145,6 +155,8 @@ def test_every_documented_default_matches_the_spec_table(token):
         "MONGO_DATABASE": "pdf_extractext",
         "MONGO_TEXTS_COLLECTION": "texts",
         "MONGO_TIMEOUT_MS": 5000,
+        "MONGO_SOCKET_TIMEOUT_MS": 5000,
+        "MONGO_MAX_POOL_SIZE": 100,
         "MAX_TEXT_BODY_BYTES": 10485760,
         "LOG_LEVEL": "INFO",
         "CORS_ALLOW_ORIGINS": (),
@@ -205,11 +217,15 @@ def test_settings_are_frozen(token):
 def test_the_int_variables_are_parsed_as_integers(clean_environment):
     clean_environment.setenv("SERVICE_API_TOKEN", "s3cr3t-token")
     clean_environment.setenv("MONGO_TIMEOUT_MS", "250")
+    clean_environment.setenv("MONGO_SOCKET_TIMEOUT_MS", "750")
+    clean_environment.setenv("MONGO_MAX_POOL_SIZE", "25")
     clean_environment.setenv("MAX_TEXT_BODY_BYTES", "2048")
 
     settings = get_settings()
 
     assert settings.mongo_timeout_ms == 250
+    assert settings.mongo_socket_timeout_ms == 750
+    assert settings.mongo_max_pool_size == 25
     assert settings.max_text_body_bytes == 2048
 
 
@@ -285,6 +301,8 @@ def test_settings_expose_exactly_the_documented_variables(token):
         "mongo_database",
         "mongo_texts_collection",
         "mongo_timeout_ms",
+        "mongo_socket_timeout_ms",
+        "mongo_max_pool_size",
         "max_text_body_bytes",
         "log_level",
         "cors_allow_origins",

@@ -22,14 +22,15 @@ TOKEN = "token-for-tests-0123456789"
 
 def build_settings(**overrides: Any) -> Settings:
     """Devuelve unos ajustes con timeout corto y sin esperas de red."""
-    return Settings(
-        mongo_uri="mongodb://mongo.invalid:27017",
-        mongo_database="texts",
-        mongo_texts_collection="texts",
-        mongo_timeout_ms=5000,
-        service_api_token=TOKEN,
-        **overrides,
-    )
+    values = {
+        "mongo_uri": "mongodb://mongo.invalid:27017",
+        "mongo_database": "texts",
+        "mongo_texts_collection": "texts",
+        "mongo_timeout_ms": 5000,
+        "service_api_token": TOKEN,
+    }
+    values.update(overrides)
+    return Settings(**values)
 
 
 @asynccontextmanager
@@ -60,14 +61,23 @@ async def build_running_app(
 async def test_the_client_is_built_with_the_configured_timeout() -> None:
     """La fábrica recibe la URI y el timeout que piden los ajustes."""
     factory = FakeMongoClientFactory()
-    connection = MongoConnection(build_settings(), client_factory=factory)
+    connection = MongoConnection(
+        build_settings(
+            mongo_timeout_ms=4000, mongo_socket_timeout_ms=3000, mongo_max_pool_size=20
+        ),
+        client_factory=factory,
+    )
 
     await connection.start()
 
     client = factory.client
     assert client.uri == "mongodb://mongo.invalid:27017"
-    assert client.options["serverSelectionTimeoutMS"] == 5000
-    assert client.options["connectTimeoutMS"] == 5000
+    assert client.options["serverSelectionTimeoutMS"] == 4000
+    assert client.options["connectTimeoutMS"] == 4000
+    assert client.options["timeoutMS"] == 4000
+    assert client.options["socketTimeoutMS"] == 3000
+    assert client.options["maxPoolSize"] == 20
+    assert client.options["retryWrites"] is False
 
 
 async def test_a_successful_start_reports_mongo_as_available() -> None:
