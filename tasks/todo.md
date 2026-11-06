@@ -477,10 +477,10 @@ Este servicio **cambia** el contrato. Antes de conectarlo:
 **Deps:** R2, R3 · **Files:** `app/repositories/mongodb_text_repository.py`, tests de repositorio · **Scope:** XS
 
 ### R14: `_codes()` recorre subclases anidadas y deduplica
-- [ ] Recorrido recursivo de subclases.
-- [ ] `set` para evitar duplicados.
-- [ ] `PAYLOAD_TOO_LARGE` aparece una vez.
-- [ ] OpenAPI sigue estable.
+- [x] Recorrido recursivo de subclases.
+- [x] `set` para evitar duplicados.
+- [x] `PAYLOAD_TOO_LARGE` aparece una vez.
+- [x] OpenAPI sigue estable.
 
 **AC:** enum completo y sin duplicados · error anidado aparece sin tocar `schemas.py`.
 **Verify:** `uv run pytest tests/integration/api/test_openapi.py tests/unit/test_errors.py`.

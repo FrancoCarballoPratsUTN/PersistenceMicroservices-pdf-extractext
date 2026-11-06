@@ -11,6 +11,7 @@ ruta en si no existe. Los clientes las distinguen, asi que los tests tambien.
 
 import pytest
 
+from app.api.schemas import _codes
 from app.errors import (
     ChecksumAlreadyExistsError,
     DocumentTooLargeError,
@@ -51,6 +52,22 @@ def test_document_too_large_uses_payload_too_large_contract():
     assert issubclass(DocumentTooLargeError, PayloadTooLargeError)
     assert DocumentTooLargeError.status == 413
     assert DocumentTooLargeError.code == "PAYLOAD_TOO_LARGE"
+
+
+def test_openapi_codes_include_nested_errors_without_duplicates():
+    class IntermediateError(PayloadTooLargeError):
+        code = "INTERMEDIATE_ERROR"
+
+    class NestedError(IntermediateError):
+        code = "NESTED_ERROR"
+
+    codes = _codes()
+
+    assert "PAYLOAD_TOO_LARGE" in codes
+    assert codes.count("PAYLOAD_TOO_LARGE") == 1
+    assert "INTERMEDIATE_ERROR" in codes
+    assert "NESTED_ERROR" in codes
+    assert len(codes) == len(set(codes))
 
 
 def test_detail_behavior():

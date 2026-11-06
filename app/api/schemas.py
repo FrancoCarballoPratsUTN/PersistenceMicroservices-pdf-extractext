@@ -20,7 +20,15 @@ SECURITY: list[dict[str, list[str]]] = [{BEARER: []}]
 
 
 def _codes() -> list[str]:
-    return sorted(error.code for error in ServiceError.__subclasses__())
+    codes: set[str] = set()
+
+    def add_subclass_codes(error_type: type[ServiceError]) -> None:
+        for subclass in error_type.__subclasses__():
+            codes.add(subclass.code)
+            add_subclass_codes(subclass)
+
+    add_subclass_codes(ServiceError)
+    return sorted(codes)
 
 
 _TEXT = schema_of(TextOut, "A stored text, as GET and PUT answer it.")
