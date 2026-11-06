@@ -487,10 +487,10 @@ Este servicio **cambia** el contrato. Antes de conectarlo:
 **Deps:** R1 · **Files:** `app/api/schemas.py`, `tests/integration/api/test_openapi.py` · **Scope:** XS
 
 ### R15: `compare_digest` sobre bytes para tokens no ASCII
-- [ ] Codificar presentado y esperado a UTF-8.
-- [ ] Token no ASCII correcto no lanza `TypeError`.
-- [ ] Token incorrecto sigue `401` uniforme.
-- [ ] Tests ASCII y no ASCII.
+- [x] Codificar presentado y esperado a UTF-8.
+- [x] Token no ASCII correcto no lanza `TypeError`.
+- [x] Token incorrecto sigue `401` uniforme.
+- [x] Tests ASCII y no ASCII.
 
 **AC:** sin `500` por token no ASCII · comparación constante.
 **Verify:** `uv run pytest tests/unit/api/test_auth.py -k "token or unicode"`.

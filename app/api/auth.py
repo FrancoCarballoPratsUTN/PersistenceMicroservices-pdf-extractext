@@ -62,7 +62,9 @@ def rejection_reason(header: str | None, expected_token: str) -> str | None:
     presented = credentials.strip()
     if not presented:
         return "missing credentials"
-    if not secrets.compare_digest(presented, expected_token):
+    if not secrets.compare_digest(
+        presented.encode("utf-8"), expected_token.encode("utf-8")
+    ):
         return "token mismatch"
     return None
 

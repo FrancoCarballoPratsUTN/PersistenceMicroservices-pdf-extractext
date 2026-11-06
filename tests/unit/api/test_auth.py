@@ -94,7 +94,7 @@ async def send_request(
     app: FastAPI,
     method: str,
     url: str,
-    header: str | None = None,
+    header: str | bytes | None = None,
     request_id: str | None = None,
 ) -> httpx.Response:
     """Envía una petición en proceso a ``app``.
@@ -178,6 +178,27 @@ async def test_a_valid_token_reaches_the_route():
 
     assert response.status_code == 200
     assert response.json() == {"message": "OK", "checksum": CHECKSUM}
+
+
+async def test_a_valid_unicode_token_reaches_the_route():
+    token = "tóken-secreto"
+    response = await send_request(
+        build_app(token), "GET", "/private", f"Bearer {token}".encode("latin-1")
+    )
+
+    assert response.status_code == 200
+
+
+async def test_an_invalid_unicode_token_is_rejected_uniformly():
+    response = await send_request(
+        build_app(),
+        "GET",
+        "/private",
+        "Bearer token-incorrecto-ñ".encode("latin-1"),
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == REJECTION_DETAIL
 
 
 @pytest.mark.parametrize("scheme", ["bearer", "BEARER", "BeArEr"])
