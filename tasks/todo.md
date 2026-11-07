@@ -566,22 +566,23 @@ Este servicio **cambia** el contrato. Antes de conectarlo:
 ## Phase 6: Verificación final
 
 ### R20: Matriz manual, regresión completa y checklist de release
-- [ ] Suite, lint, formato y cobertura pasan.
-- [ ] Matriz manual completa: `401` con ID, `415`, `413` chunked, `409`, `404`, `503` en `PUT`/`DELETE`, `/metrics` `404`.
-- [ ] `X-Request-ID` válido se eco; inválido se reemplaza; access log lo incluye.
-- [ ] CORS no devuelve `*`.
-- [ ] README/SPEC revisados.
-- [ ] `tasks/todo.md` actualizado y revisión humana registrada.
+- [x] Suite, lint, formato y cobertura pasan (468 tests; 93,63 %).
+- [x] Matriz manual: `401` con ID, `415`, `413` chunked, `409`, `404`, `503` en `PUT`/`DELETE`, `/metrics` `404`.
+- [x] `X-Request-ID` válido se eco; inválido se reemplaza; access log lo incluye.
+- [x] CORS no devuelve `*`.
+- [x] README/SPEC revisados; sin contradicciones encontradas.
+- [x] `tasks/todo.md` actualizado con resultados.
+- [ ] Revisión humana registrada.
 
 **AC:** todos los hallazgos con test de regresión · contrato Go intacto.
 **Verify:** `uv run pytest --cov=app --cov-fail-under=85` · `uv run ruff check . && uv run ruff format --check .` · `uv sync --frozen && uv lock --check` · matriz de `curl` de R20 en `plan.md`.
 **Deps:** R1–R19 · **Files:** `tasks/plan.md`, `tasks/todo.md` · **Scope:** Small
 
 ### Checkpoint Final
-- [ ] `uv run pytest --cov=app --cov-fail-under=85` pasa.
-- [ ] `uv run ruff check .` y `uv run ruff format --check .` pasan.
-- [ ] Matriz manual de `curl` completa y documentada.
-- [ ] No existe `/metrics`; no hay dependencia de métricas.
+- [x] `uv run pytest --cov=app --cov-fail-under=85` pasa (468 tests; 93,63 %).
+- [x] `uv run ruff check .` y `uv run ruff format --check .` pasan.
+- [x] Matriz manual de `curl` completa y documentada en `tasks/plan.md`.
+- [x] No existe la ruta `/metrics`; no hay `prometheus_client` en `pyproject.toml` ni en `uv.lock`.
 - [ ] **Revisión humana antes de reintentar el despliegue.**
 
 ---

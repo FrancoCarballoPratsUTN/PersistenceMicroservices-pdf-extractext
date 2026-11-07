@@ -1,0 +1,30 @@
+# Riesgos aceptados: no hay una versión corregida instalable en esta imagen.
+# Las reglas están ancladas a la versión instalada, así que dejan de aplicar
+# en cuanto se actualice el paquete y Grype vuelve a mostrar el hallazgo.
+ignore:
+  - vulnerability: CVE-2025-60876
+    package:
+      name: 'busybox(-binsh)?|ssl_client'
+      version: '1.37.0-r31'
+      type: apk
+    reason: >-
+      BusyBox wget y ssl_client no se usan: el CMD es exec-form y el
+      HEALTHCHECK usa Python. Alpine 3.24 aún no ha backporteado el fix.
+
+  - vulnerability: CVE-2026-116566
+    package:
+      name: python
+      version: '3.15.2'
+      type: binary
+    reason: >-
+      socket.getaddrinfo solo recibe hosts de configuración de confianza
+      (MONGO_URI, Consul y 127.0.0.1). Fix pendiente en Python 3.15.3/3.16.
+
+  - vulnerability: CVE-2026-103995
+    package:
+      name: python
+      version: '3.15.2'
+      type: binary
+    reason: >-
+      http.client solo parsea respuestas de Consul (configurado) y del
+      healthcheck local. Fix pendiente en Python 3.15.3/3.16.

@@ -1492,25 +1492,71 @@ workflow de CI o configuración de Traefik si existe
 contrato del orquestador Go no cambió.
 
 **Acceptance criteria:**
-- [ ] Suite completa, lint, formato y cobertura pasan.
-- [ ] Matriz manual de `curl` completa: `401` con ID, `415`, `413` chunked,
+- [x] Suite completa, lint, formato y cobertura pasan.
+- [x] Matriz manual de `curl` completa: `401` con ID, `415`, `413` chunked,
       `409`, `404`, `503` en `PUT`/`DELETE`, `404` en `/metrics`.
-- [ ] `X-Request-ID` válido se eco; inválido se reemplaza; access log lo incluye.
-- [ ] CORS no devuelve `*`.
-- [ ] README/SPEC revisados; no hay contradicciones.
-- [ ] `tasks/todo.md` actualizado y **revisión humana** registrada.
+- [x] `X-Request-ID` válido se eco; inválido se reemplaza; access log lo incluye.
+- [x] CORS no devuelve `*`.
+- [x] README/SPEC revisados; no hay contradicciones.
+- [x] `tasks/todo.md` actualizado con los resultados.
+- [ ] **Revisión humana** registrada.
 
 **Verification:**
-- [ ] `uv run pytest --cov=app --cov-fail-under=85`
-- [ ] `uv run ruff check . && uv run ruff format --check .`
-- [ ] `uv sync --frozen && uv lock --check`
-- [ ] `curl -i localhost:8082/texts?checksum=x` ⇒ `401` + `x-request-id`
-- [ ] `curl -i -H "X-Request-ID: test-123" ...` ⇒ eco
-- [ ] `curl -i -X POST ... -H "Transfer-Encoding: chunked" ...` ⇒ `413`
-- [ ] `curl -i -X PUT ...` con Mongo caído ⇒ `503`
-- [ ] `curl -i -X DELETE ...` con Mongo caído ⇒ `503`
-- [ ] `curl -i localhost:8082/metrics` ⇒ `404`
-- [ ] `curl -i -H "Origin: https://evil.example" ...` ⇒ sin CORS `*`
+- [x] `uv run pytest --cov=app --cov-fail-under=85` → 468 passed, cobertura 93,63 %.
+- [x] `uv run ruff check . && uv run ruff format --check .`
+- [x] `uv sync --frozen && uv lock --check`
+- [x] `curl -i localhost:8082/texts?checksum=x` → `401` + `x-request-id`.
+- [x] `curl -i -H "X-Request-ID: r20-valid-123" ...` → eco; ID inválido reemplazado.
+- [x] Cuerpo chunked de 10 MiB + 1 byte → `413`.
+- [x] `PUT` y `DELETE` con Mongo no disponible → `503`.
+- [x] Crear y repetir un documento → `201` y `409`; limpieza → `200`.
+- [x] Documento inexistente y `/metrics` → `404`.
+- [x] `Origin: https://evil.example` → sin cabecera `Access-Control-Allow-Origin`.
+
+**Registro de ejecución (2026-11-06):** La matriz HTTP se ejecutó contra el
+servicio local en `127.0.0.1:8082`; para `503`, una instancia temporal en
+`127.0.0.1:18000` apuntó a un puerto Mongo cerrado, sin interrumpir el Mongo
+compartido. La prueba de acceso registró `request_id=r20-access-log`; los logs de
+`PUT` y `DELETE` también conservaron sus IDs. El documento creado para probar
+`409` se eliminó al terminar. El valor del token no se guardó en este registro.
+
+**Matriz reproducible con curl** (definir `TOKEN` en el entorno; no guardarlo en
+el plan):
+
+```bash
+BASE=http://localhost:8082
+curl -i -H 'X-Request-ID: r20-unauth' "$BASE/texts?checksum=x"
+curl -i -H 'X-Request-ID: r20-valid-123' "$BASE/health"
+curl -i -H "Authorization: Bearer $TOKEN" -X POST \
+  -H 'Content-Type: text/plain' --data-binary bad "$BASE/texts"
+head -c 10485761 /dev/zero > /tmp/r20-body.bin
+curl -i --http1.1 -H "Authorization: Bearer $TOKEN" -X POST \
+  -H 'Content-Type: application/json' -H 'Transfer-Encoding: chunked' \
+  --data-binary @/tmp/r20-body.bin "$BASE/texts"
+curl -i -H 'X-Request-ID: invalid id' "$BASE/health"
+CHECKSUM="r20-$(date +%s)-$$"
+BODY="{\"checksum\":\"$CHECKSUM\",\"text\":\"release-check\"}"
+curl -i -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d "$BODY" "$BASE/texts"
+curl -i -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d "$BODY" "$BASE/texts"  # repetir la misma petición: 409
+curl -i -X DELETE -H "Authorization: Bearer $TOKEN" \
+  "$BASE/texts?checksum=$CHECKSUM"  # limpiar el documento de prueba
+curl -i -H "Authorization: Bearer $TOKEN" "$BASE/texts?checksum=missing-r20"
+curl -i -H "Authorization: Bearer $TOKEN" "$BASE/metrics"
+curl -i -H 'Origin: https://evil.example' "$BASE/health"
+```
+
+Para reproducir los `503`, iniciar una instancia separada con `MONGO_URI` en un
+puerto cerrado y `MONGO_TIMEOUT_MS=250`; enviarle:
+
+```bash
+curl -i -X PUT -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"name":"r20"}' \
+  http://localhost:18000/texts?checksum=r20-down
+curl -i -X DELETE -H "Authorization: Bearer $TOKEN" \
+  http://localhost:18000/texts?checksum=r20-down
+```
 
 **Dependencies:** R1–R19
 **Files likely touched:** `tasks/plan.md`, `tasks/todo.md`

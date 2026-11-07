@@ -208,6 +208,11 @@ tempCodeRunnerFile.py
 # Ruff stuff:
 .ruff_cache/
 
+# Artefactos locales de corridas de pytest/uv dentro de contenedores
+.pytest-tmp*
+.test-tmp/
+.uv-cache-*/
+
 # PyPI configuration file
 .pypirc
 

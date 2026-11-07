@@ -3,7 +3,7 @@ FROM python:3.15-alpine AS builder
 # Copiar el binario de uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Instalar herramientas básicas de compilación (equivalente a build-essential)
+# Instalar herramientas básicas de compilación en Alpine
 RUN apk add --no-cache build-base
 
 ENV UV_COMPILE_BYTECODE=1 \
@@ -25,14 +25,19 @@ FROM python:3.15-alpine AS runtime
 # Actualizar paquetes del sistema
 RUN apk upgrade --no-cache
 
+# El servicio no usa sqlite3, bz2, lzma, ctypes, readline, curses ni dbm.
+# Quitar el meta-paquete .python-rundeps elimina esas libs opcionales y
+# sqlite-libs, cuyas CVEs Alpine 3.24 aún no ha corregido.
+RUN apk del .python-rundeps
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:$PATH"
 
 WORKDIR /app
 
-# Sintaxis de Alpine para crear usuario y grupo sin privilegios
-RUN addgroup -S app && adduser -S app -G app -h /app -D
+# Sintaxis de Alpine (busybox) para crear usuario y grupo sin privilegios
+RUN addgroup -S app && adduser -S -G app -h /app -H app
 
 COPY --from=builder --chown=app:app /app /app
 
