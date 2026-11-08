@@ -1,10 +1,3 @@
-"""Minimal Consul agent API client for service lifecycle.
-
-Transient registry failures are retried with bounded exponential backoff: three
-attempts total, with short waits between them. A final failure is reported as
-``ConsulConfigurationError`` so startup has one explicit failure mode.
-"""
-
 import json
 import ssl
 from time import sleep

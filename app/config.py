@@ -33,13 +33,7 @@ def _positive_integer(
 
 
 def _log_level(value: str | None, default: str = "INFO") -> str:
-    """Convierte una variable en un nivel de logging válido de la stdlib.
-
-    Se acepta el nombre estándar en cualquier capitalización (``info``, ``INFO``).
-    Un nombre desconocido detiene el arranque: un nivel mal escrito subiría o
-    bajaría el detalle del log en silencio, que es justo lo que no se quiere
-    depurar un incidente.
-    """
+    """Convierte una variable en un nivel de logging válido de la stdlib."""
     if value is None or not str(value).strip():
         return default
 
@@ -90,9 +84,6 @@ class Settings:
 def get_settings(environ: Mapping[str, str] | None = None) -> Settings:
     if environ is None:
         environ = os.environ
-
-    # El orquestador nombra el secreto compartido PERSISTENCE_API_TOKEN; es el
-    # nombre canonico. SERVICE_API_TOKEN se sigue aceptando por compatibilidad.
     token = environ.get("PERSISTENCE_API_TOKEN") or environ.get("SERVICE_API_TOKEN")
 
     if not token or not str(token).strip():

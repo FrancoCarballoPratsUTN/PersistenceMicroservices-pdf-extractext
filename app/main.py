@@ -1,17 +1,3 @@
-"""Raíz de composición: el único módulo que sabe que existen todas las capas.
-
-Aquí se cablea todo y en ningún otro sitio, así que importar un router, un
-servicio o un repositorio nunca arrastra el framework, y cada uno se puede
-testear por separado. El servicio arranca con::
-
-    uvicorn app.main:create_app --factory
-
-Se usa la fábrica en vez de una instancia a nivel de módulo para que importar
-este módulo no necesite entorno alguno: la configuración se resuelve cuando
-arranca el proceso, que es donde es fatal no configurar ``PERSISTENCE_API_TOKEN``
-ni su alias ``SERVICE_API_TOKEN`` (SPEC 2.5).
-"""
-
 import asyncio
 import logging
 import os
@@ -67,9 +53,6 @@ def _consul_registration() -> dict[str, object] | None:
     service_name = os.getenv("CONSUL_SERVICE_NAME", "persistence")
     service_id = os.getenv("CONSUL_SERVICE_ID") or f"{service_name}-{address}"
     tags_env = os.getenv("CONSUL_SERVICE_TAGS", "")
-    # Separador de tags: ';'. Las comas son parte del valor (p. ej. la lista de
-    # middlewares de Traefik: "security-headers@file,persistence-cb@file"), por lo
-    # que NO deben usarse como separador.
     tags: list[str] = []
     for part in tags_env.split(";"):
         tag = part.strip()
@@ -99,13 +82,6 @@ async def _register_service_off_event_loop(registration: dict[str, object]) -> N
 def _install_deregister_handler(
     deregister: Callable[[], None],
 ) -> Callable[[], None]:
-    """Deregistrar al recibir SIGTERM/SIGINT, antes de que uvicorn drene.
-
-    Uvicorn instala sus handlers antes de ejecutar el lifespan. Este handler se
-    encadena al anterior: primero saca la instancia de Consul y después deja que
-    uvicorn deje de aceptar tráfico y termine las peticiones en vuelo. Devuelve
-    una función para restaurar los handlers al cerrar el lifespan.
-    """
     previous_handlers: dict[int, Any] = {}
 
     def handle_signal(signum: int, frame: Any) -> None:
@@ -131,30 +107,10 @@ def _install_deregister_handler(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Prepara MongoDB al subir y lo libera al bajar.
-
-    Una base de datos que no contesta se registra, no se propaga: el servicio
-    sigue en pie y ``/readyz`` reporta la caída, que es lo que el orquestador
-    necesita para sacar la instancia de rotación sin un bucle de reinicio
-    (SPEC 5.5).
-
-    Arranque y apagado se registran con su duración, así que el timeline de una
-    instancia se lee de un vistazo. El estado de MongoDB no se repite aquí: ``start()``
-    ya lo avisa por su cuenta.
-
-    El apagado tampoco puede fallar. La deregistración se intenta al recibir la
-    señal, antes de que uvicorn drene; el ``finally`` queda como fallback para
-    las salidas que no pasan por ese camino. Uvicorn ya terminó las peticiones
-    en vuelo antes de llegar aquí: lo que queda es soltar el pool, y un error al
-    hacerlo se registra en vez de convertir una parada limpia en una salida con
-    error.
-    """
     connection: MongoConnection = app.state.mongo
     logger.info("Starting the service.")
     startup_started = perf_counter()
     await connection.start()
-    # La colección sólo existe una vez construido el cliente, así que el servicio
-    # se cablea aquí: una conexión, un repositorio, un pool (SPEC 2.1).
     app.state.text_service = TextService(MongoTextRepository(connection.texts()))
     registration = _consul_registration()
     if registration is not None:
@@ -233,19 +189,12 @@ def create_app(
     app = FastAPI(title=resolved.app_name, lifespan=lifespan)
     app.state.settings = resolved
     app.state.mongo = mongo
-    # Las sondas sólo preguntan a un callable, nunca a la base de datos, así que
-    # las rutas de app/api no saben nada de pymongo (SPEC 2.1).
     app.state.readiness_check = mongo.is_available
     app.include_router(health.router)
     app.include_router(texts.router)
     register_exception_handlers(app)
     publish(app)
-    # Starlette ejecuta el middleware añadido más recientemente como el más
-    # externo, así que este bloque se lee al revés: añadir aquí significa
-    # ejecutarse el último. El orden de ejecución resultante es el que pide
-    # SPEC 3.3 -- 401 antes que 415, 415 antes que 413, y ambos antes que el 400
-    # que produciría el parseo del body. RequestId rodea el access log y la
-    # autenticación para que también registre los rechazos 401.
+
     app.add_middleware(BodySizeLimitMiddleware, settings=resolved)
     app.add_middleware(ContentTypeMiddleware)
     app.add_middleware(BearerAuthMiddleware, settings=resolved)

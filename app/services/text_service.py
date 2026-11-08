@@ -1,10 +1,3 @@
-"""Lógica de negocio del recurso de textos (Capa 2).
-
-El servicio es dueño de las reglas que los endpoints deben respetar y de las
-marcas de tiempo que las acompañan; la persistencia se queda detrás del puerto
-(SPEC 4).
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -26,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 class TextService:
     """Casos de uso sobre los textos almacenados.
-
     Args:
         repository: Dónde viven los textos.
         now_factory: Reloj, sustituible en los tests. Por defecto, el ahora en
@@ -43,13 +35,7 @@ class TextService:
         self._now_factory = now_factory or (lambda: datetime.now(UTC))
 
     async def create(self, command: CreateTextCommand) -> None:
-        """Almacena un texto, rechazando un checksum que ya esté ocupado.
-
-        La primera barrera es la búsqueda, que responde sin tocar MongoDB. La
-        segunda es el ``_id`` único, que es lo que de verdad cierra la carrera
-        bajo concurrencia (SPEC 5.3): el repositorio lanza
-        ``ChecksumAlreadyExistsError`` ante el duplicado y aquí no se captura.
-
+        """
         Args:
             command: El texto ya validado que se debe almacenar.
 
@@ -97,15 +83,6 @@ class TextService:
 
     async def update(self, checksum: str, changes: TextChanges) -> StoredText:
         """Aplica los cambios pedidos a un texto almacenado.
-
-        El servicio sólo decide qué significa no encontrarlo: el repositorio
-        informa de que no se actualizó nada y el ``404`` se lanza aquí, en la
-        Capa 2, en vez de en el router.
-
-        La marca ``updated_at`` es del repositorio y deliberadamente no se
-        asigna aquí, así que el servicio nunca es dueño de un reloj en este
-        camino.
-
         Args:
             checksum: El checksum del texto que hay que cambiar, tomado de la
                 cadena de consulta.
@@ -131,11 +108,6 @@ class TextService:
 
     async def delete(self, checksum: str) -> None:
         """Elimina un texto almacenado.
-
-        No hay ninguna búsqueda antes del borrado: el repositorio ya informa de
-        si quitó algo, y preguntar dos veces sólo añadiría un viaje de ida y
-        vuelta y una segunda respuesta que mantener sincronizada.
-
         Args:
             checksum: El checksum del texto que hay que eliminar.
 

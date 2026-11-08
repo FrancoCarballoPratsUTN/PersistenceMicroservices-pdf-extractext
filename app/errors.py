@@ -2,12 +2,7 @@ from typing import ClassVar
 
 
 class ServiceError(Exception):
-    """Clase base de todo fallo que este servicio reporta a un cliente.
-
-    La base lleva el contrato de último recurso, así que un error que nunca se
-    clasificó se serializa igualmente sin lanzar ``AttributeError`` mientras se
-    construye la respuesta.
-    """
+    """Clase base de todo fallo que este servicio reporta a un cliente."""
 
     status: ClassVar[int] = 500
     code: ClassVar[str] = "INTERNAL_ERROR"
@@ -21,11 +16,7 @@ class ServiceError(Exception):
 
 
 class ChecksumAlreadyExistsError(ServiceError):
-    """Ya hay un documento guardado con este checksum.
-
-    Se lanza por las dos barreras de duplicado de SPEC 5.3, así que el cliente ve
-    un único resultado sea cual sea la barrera que perdiera la carrera.
-    """
+    """Ya hay un documento guardado con este checksum. """
 
     status = 409
     code = "CHECKSUM_ALREADY_EXISTS"
@@ -55,11 +46,7 @@ class UnauthorizedError(ServiceError):
 
 
 class ValidationError(ServiceError):
-    """El body o el query string de la petición son inválidos estructuralmente.
-
-    Cubre JSON malformado, un body que no es objeto, tipos equivocados, un campo
-    obligatorio ausente y un checksum fuera del query string.
-    """
+    """El body o el query string de la petición son inválidos estructuralmente."""
 
     status = 400
     code = "VALIDATION_ERROR"
@@ -79,12 +66,7 @@ class ImmutableFieldError(ServiceError):
 
 
 class PayloadTooLargeError(ServiceError):
-    """El body de la petición, o el documento resultante, excede el tamaño permitido.
-
-    Tiene dos orígenes según SPEC 6.2 (límite del body en la Capa 1, límite BSON
-    detectado en la Capa 3 y decidido en la Capa 2) y una respuesta idéntica en
-    ambos casos.
-    """
+    """El body de la petición, o el documento resultante, excede el tamaño permitido. """
 
     status = 413
     code = "PAYLOAD_TOO_LARGE"
@@ -114,11 +96,7 @@ class MethodNotAllowedError(ServiceError):
 
 
 class ResourceNotFoundError(ServiceError):
-    """La ruta solicitada no existe.
-
-    Distinta de :class:`TextNotFoundError`: ambas son 404, pero ésta significa que
-    la URL está mal mientras aquélla significa que falta el documento.
-    """
+    """La ruta solicitada no existe."""
 
     status = 404
     code = "NOT_FOUND"
@@ -128,11 +106,7 @@ class ResourceNotFoundError(ServiceError):
 
 
 class PersistenceError(ServiceError):
-    """MongoDB estaba inalcanzable o devolvió un error del servidor.
-
-    Deliberadamente no hereda de los demás errores: es un 503 sobre
-    disponibilidad, no un 409 sobre un documento en conflicto.
-    """
+    """MongoDB estaba inalcanzable o devolvió un error del servidor."""
 
     status = 503
     code = "PERSISTENCE_ERROR"

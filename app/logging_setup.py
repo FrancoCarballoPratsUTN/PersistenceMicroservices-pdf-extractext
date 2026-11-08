@@ -1,15 +1,3 @@
-"""Arranque del logging del proceso.
-
-Un único sitio decide dónde van las líneas del servicio y con qué formato, para
-que los ``logger.info`` de la aplicación (acceso, ciclo de vida) salgan de verdad:
-sin esta llamada, los loggers ``app.*`` propagan a un logger raíz sin handler, y
-sólo sobreviven los WARNING por el ``lastResort`` de la stdlib.
-
-``basicConfig`` es deliberadamente conservador: si el logger raíz ya tiene
-handlers (el caso de los tests, que capturan con ``caplog``) no hace nada. Eso
-hace que arrancar el logging nunca pise una configuración que ya existe.
-"""
-
 import logging
 from typing import Any
 

@@ -1,10 +1,3 @@
-"""La conexión a MongoDB: cómo se construye, se comprueba, se prepara y se cierra.
-
-Este es el único sitio del servicio que sabe que MongoDB existe (SPEC 2.1).
-Todo lo que está por encima pregunta a la conexión si MongoDB responde, y nunca
-importa pymongo.
-"""
-
 import logging
 from collections.abc import Callable
 from time import monotonic
@@ -77,13 +70,7 @@ class MongoConnection:
         return True
 
     async def close(self) -> None:
-        """Libera el cliente. Seguro de llamar más de una vez.
-
-        Soltar el pool no puede ser la razón de que un apagado limpio salga con
-        error, así que un error del driver se registra y se traga, igual que
-        ``is_available`` nunca propaga un error de red. La raíz de composición
-        conserva un último seguro para lo que este método no anticipa.
-        """
+        """Libera el cliente. Seguro de llamar más de una vez."""
         if self._client is None:
             return
         try:
@@ -121,9 +108,5 @@ class MongoConnection:
         return self._client[self._settings.mongo_database]
 
     def texts(self) -> Any:
-        """Devuelve la colección que contiene los textos.
-
-        El repositorio se construye sobre ella, así que todo el servicio
-        comparte un único cliente y un único pool de conexiones.
-        """
+        """Devuelve la colección que contiene los textos."""
         return self._database()[self._settings.mongo_texts_collection]

@@ -1,24 +1,3 @@
-"""La pila de middleware HTTP (T15).
-
-Dónde se coloca cada pieza se decide una sola vez, en :func:`app.main.create_app`, y
-sigue el orden de SPEC 3.3: el rechazo más barato ocurre primero, así que un
-llamador no autenticado nunca tiene un cuerpo analizado ni medido en su nombre.
-
-Dos reglas merecen enunciarse aquí porque parecen excepciones:
-
-CORS es el más externo
-    Un preflight del navegador no lleva credenciales por diseño, así que
-    responderlo fuera de la comprobación del token es lo que lo hace funcionar
-    siquiera. No cuesta nada en seguridad: una petición real sigue cruzando la
-    comprobación del token, y ``CORSMiddleware`` solo añade cabeceras a las
-    respuestas que deja pasar.
-
-El límite del cuerpo lee ``Content-Length``, nunca el cuerpo
-    La cabecera es lo que el llamador ya declaró, así que el rechazo no cuesta
-    nada y una subida enorme nunca se lee en memoria. Un valor ausente o mal
-    formado cuenta como cero en lugar de lanzar: una cabecera no vale un ``500``.
-"""
-
 from __future__ import annotations
 
 import logging

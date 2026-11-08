@@ -1,21 +1,3 @@
-"""Validación de la petición de actualización (Capa 1).
-
-Body crudo -> :class:`TextChanges`, con la tabla de SPEC 4.3. Los tipos se
-comprueban contra :class:`UpdateTextBody`, el mismo modelo del que se genera el
-esquema publicado (T18).
-
-Ausente y ``null`` significan lo mismo aquí: *no enviado, déjalo igual*. ``""`` y
-``{}`` significan lo contrario, *escribe este valor vacío*, y sólo se distinguen
-porque los cambios se comparan contra ``None``.
-
-Por qué los campos inmutables se rechazan antes de que el modelo vea el body
-------------------------------------------------------------------------------
-``text`` y ``checksum`` son una regla estructural, no de tipos. Comprobarlos
-primero garantiza que un ``text`` en el body nunca pase desapercibido, ni
-siquiera cuando el resto del body también es inválido, y evita que el código que
-lo hace dependa de la política de ``extra`` de un modelo.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -55,11 +37,6 @@ def validate(raw: object) -> TextChanges:
 
 def _mapping(raw: object) -> dict[str, Any]:
     """Devuelve ``raw`` como objeto, o lo rechaza con nuestras palabras.
-
-    A diferencia de la petición de creación, la regla de campos inmutables tiene
-    que leer el body como un mapping antes de que pueda hacerlo ningún modelo, así
-    que esta guarda no se puede dejar en ``checked``.
-
     Args:
         raw: El body tal como llegó del cable.
 

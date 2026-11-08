@@ -1,23 +1,3 @@
-"""Autenticación por token Bearer en el límite HTTP (SPEC 3.2).
-
-La autenticación es una cuestión del transporte, así que vive por entero en la
-Capa 1: el servicio, el repositorio y el cliente de MongoDB nunca llegan a saber
-que existe un token.
-
-Un rechazo, cuatro motivos
---------------------------
-Una petición puede fallar aquí porque la cabecera no esté, porque no lleve valor,
-porque use otro esquema o porque el valor no sea el token configurado. Las
-cuatro responden ``401`` con un único ``detail`` idéntico: decirle a quien llama
-*cuál* de las cuatro se=topó sería un oráculo para adivinar un token carácter a
-carácter. El motivo se conserva, pero solo en el log del servidor.
-
-El esquema se lee sin distinguir mayúsculas (RFC 7235); el token nunca, porque
-los tokens son secretos y los secretos distinguen mayúsculas.
-``secrets.compare_digest`` impide que la duración de la comparación revele
-cuántos caracteres iniciales ya eran correctos.
-"""
-
 import logging
 import secrets
 

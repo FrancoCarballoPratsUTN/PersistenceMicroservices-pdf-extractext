@@ -1,13 +1,3 @@
-"""Implementación en MongoDB del puerto TextRepository (T8).
-
-El repositorio traduce los fallos de MongoDB al vocabulario del dominio, así que
-nada por encima de esta capa tiene que saber que pymongo existe (SPEC 2.1).
-
-Recibe la colección en vez de construir un cliente: :mod:`app.repositories.mongodb`
-ya es dueño de la conexión y de su ciclo de vida, y un segundo cliente aquí sería
-un segundo pool de conexiones para la misma base de datos.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -130,14 +120,7 @@ class MongoTextRepository:
         return _to_stored(document) if document is not None else None
 
     async def update(self, checksum: str, changes: TextChanges) -> StoredText | None:
-        """Aplica los cambios y devuelve el resultado, o None si no existe.
-
-        Sólo se escriben los campos que el cliente envió de verdad: un cambio
-        que se deja como ``None`` no aparece en el ``$set`` y conserva su valor
-        almacenado. Las comparaciones son contra ``None`` para que una cadena
-        vacía o un objeto vacío siga sobrescribiendo, y ``created_at`` nunca
-        entra en el ``$set``.
-        """
+        """Aplica los cambios y devuelve el resultado, o None si no existe."""
         update: dict[str, Any] = {"updated_at": _utcnow()}
         if changes.name is not None:
             update["name"] = changes.name
