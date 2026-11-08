@@ -1,6 +1,4 @@
 from __future__ import annotations
-
-from typing import Any
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Request
@@ -8,31 +6,15 @@ from fastapi.responses import JSONResponse
 from starlette.status import HTTP_201_CREATED
 
 from app.api.dependencies import get_text_service
-from app.api.schemas import (
-    SECURITY,
-    accepts,
-    answered_with,
-    failing_with,
-)
-from app.api.validators.common import ValidationError, require_str
+from app.api.responses import ok_response
+from app.api.schemas import SECURITY, accepts, answered_with, failing_with
+from app.api.validators.common import read_json_body, require_str
 from app.api.validators.create_text import validate as validate_create
 from app.api.validators.update_text import validate as validate_update
 from app.repositories.serialization import to_api_dict
 from app.services.text_service import TextService
 
 router = APIRouter()
-
-
-def _ok(checksum: str) -> dict[str, str]:
-    return {"message": "OK", "checksum": checksum}
-
-
-async def _read_json(request: Request) -> Any:
-    try:
-        return await request.json()
-    except ValueError as error:
-        raise ValidationError("The body must be JSON.") from error
-
 
 @router.get(
     "/texts",
@@ -51,7 +33,6 @@ async def get_text(
     item = await service.find_by_checksum(require_str(checksum))
     return JSONResponse(content=to_api_dict(item))
 
-
 @router.post(
     "/texts",
     status_code=HTTP_201_CREATED,
@@ -68,14 +49,13 @@ async def create_text(
     request: Request,
     service: TextService = Depends(get_text_service),
 ) -> JSONResponse:
-    command = validate_create(await _read_json(request))
+    command = validate_create(await read_json_body(request))
     await service.create(command)
     return JSONResponse(
         status_code=HTTP_201_CREATED,
-        content=_ok(command.checksum),
+        content=ok_response(command.checksum),
         headers={"Location": f"/texts?checksum={quote(command.checksum, safe='')}"},
     )
-
 
 @router.put(
     "/texts",
@@ -93,10 +73,9 @@ async def update_text(
     checksum: str | None = None,
     service: TextService = Depends(get_text_service),
 ) -> JSONResponse:
-    changes = validate_update(await _read_json(request))
+    changes = validate_update(await read_json_body(request))
     item = await service.update(require_str(checksum), changes)
     return JSONResponse(content=to_api_dict(item))
-
 
 @router.delete(
     "/texts",
@@ -113,4 +92,4 @@ async def delete_text(
     service: TextService = Depends(get_text_service),
 ) -> JSONResponse:
     await service.delete(require_str(checksum))
-    return JSONResponse(content=_ok(checksum))
+    return JSONResponse(content=ok_response(checksum))

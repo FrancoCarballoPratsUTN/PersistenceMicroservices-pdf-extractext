@@ -2,10 +2,19 @@ from __future__ import annotations
 
 from typing import Any
 
+from fastapi import Request
 from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
 
 from app.errors import ValidationError
+
+
+async def read_json_body(request: Request) -> Any:
+    """Lee el cuerpo JSON de una petición, o lanza ValidationError."""
+    try:
+        return await request.json()
+    except ValueError as error:
+        raise ValidationError("The body must be JSON.") from error
 
 
 def checked[ModelT: BaseModel](model: type[ModelT], raw: Any) -> ModelT:
