@@ -284,7 +284,7 @@ async def test_readyz_reuses_ping_until_cache_expires(monkeypatch) -> None:
     from app.main import create_app
 
     current_time = 10.0
-    monkeypatch.setattr(mongodb, "monotonic", lambda: current_time)
+    monkeypatch.setattr(mongodb.client, "monotonic", lambda: current_time)
     factory = FakeMongoClientFactory()
     settings = build_settings(mongo_readiness_cache_ttl_seconds=1)
     connection = MongoConnection(settings, client_factory=factory)

@@ -1,36 +1,24 @@
+"""Ciclo de vida del cliente de MongoDB: conexión, disponibilidad y cierre."""
+
+from __future__ import annotations
+
 import logging
 from collections.abc import Callable
 from time import monotonic
 from typing import Any
-from urllib.parse import unquote, urlsplit
 
 from pymongo import AsyncMongoClient
 from pymongo.errors import PyMongoError
 
 from app.config import Settings
+from app.repositories.mongodb.collections import texts as _texts
+from app.repositories.mongodb.utils import ClientFactory, redact_uri
 
 logger = logging.getLogger(__name__)
 
-ClientFactory = Callable[..., AsyncMongoClient]
-
-
-def _redact_uri(uri: str) -> str:
-    """Oculta las credenciales de una URI para que las contraseñas no lleguen al log."""
-    parsed = urlsplit(uri)
-    if parsed.password:
-        return uri.replace(f":{unquote(parsed.password)}@", ":****@")
-    return uri
-
 
 class MongoConnection:
-    """Mantiene el cliente de MongoDB y responde si la base de datos es usable.
-
-    Args:
-        settings: De dónde salen la URI, la base de datos y el tiempo máximo.
-        client_factory: Construye el cliente. En producción se usa el
-            AsyncMongoClient de pymongo; los tests entregan un doble, así que
-            nada tiene que abrir un socket.
-    """
+    """Mantiene el cliente de MongoDB y responde si la BD es usable."""
 
     def __init__(
         self, settings: Settings, client_factory: ClientFactory = AsyncMongoClient
@@ -42,16 +30,10 @@ class MongoConnection:
         self._last_availability: bool | None = None
 
     async def start(self) -> bool:
-        """Abre la conexión y comprueba que MongoDB responde.
-
-        Returns:
-            True cuando MongoDB ha respondido. False cuando no está disponible;
-            el servicio sigue en pie y /readyz informa del fallo.
-        """
+        """Abre la conexión y comprueba que MongoDB responde."""
         timeout = self._settings.mongo_timeout_ms
         uri = self._settings.mongo_uri
-        self._last_readiness_check = None
-        self._last_availability = None
+        self._last_readiness_check = self._last_availability = None
         self._client = self._client_factory(
             uri,
             timeoutMS=timeout,
@@ -61,7 +43,7 @@ class MongoConnection:
             maxPoolSize=self._settings.mongo_max_pool_size,
             retryWrites=False,
         )
-        logger.debug("MongoDB connection prepared with uri=%s", _redact_uri(uri))
+        logger.debug("MongoDB connection prepared with uri=%s", redact_uri(uri))
         if not await self.is_available():
             logger.warning(
                 "MongoDB did not answer during start-up; /readyz reports unavailable."
@@ -95,10 +77,9 @@ class MongoConnection:
 
         try:
             await self._database().command("ping")
+            available = True
         except PyMongoError:
             available = False
-        else:
-            available = True
 
         self._last_readiness_check = now
         self._last_availability = available
@@ -109,4 +90,4 @@ class MongoConnection:
 
     def texts(self) -> Any:
         """Devuelve la colección que contiene los textos."""
-        return self._database()[self._settings.mongo_texts_collection]
+        return _texts(self)
