@@ -33,7 +33,7 @@ async def test_create_log_has_request_id_and_safe_checksum(caplog) -> None:
     command = _command(text="private body", metadata={"secret": "private data"})
 
     try:
-        with caplog.at_level(logging.INFO, logger="app.services.text_service"):
+        with caplog.at_level(logging.INFO, logger="app.services.audit_logger"):
             await _service(FakeTextRepository()).create(command)
 
         message = caplog.text
@@ -54,7 +54,7 @@ async def test_update_and_delete_logs_have_request_id(caplog) -> None:
     context_token = request_id_context.set("request-456")
 
     try:
-        with caplog.at_level(logging.INFO, logger="app.services.text_service"):
+        with caplog.at_level(logging.INFO, logger="app.services.audit_logger"):
             await service.update("abc123", TextChanges(name="new name"))
             await service.delete("abc123")
 
