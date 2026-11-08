@@ -223,7 +223,7 @@ async def test_the_presented_token_never_reaches_the_response_body():
 
 
 async def test_neither_token_ever_reaches_the_log(caplog):
-    with caplog.at_level(logging.DEBUG, logger="app.api.auth"):
+    with caplog.at_level(logging.DEBUG, logger="app.api.auth.middleware"):
         await send_request(build_app(), "GET", "/private", f"Bearer {WRONG_TOKEN}")
         await send_request(build_app(), "GET", "/private", f"Bearer {TOKEN}")
 
@@ -239,7 +239,7 @@ async def test_the_log_records_why_each_credential_was_refused(caplog):
     Las cuatro cabeceras son los cuatro casos de SPEC 3.2, y cada uno falla en un
     paso distinto, que es lo que hace que las razones difieran.
     """
-    with caplog.at_level(logging.WARNING, logger="app.api.auth"):
+    with caplog.at_level(logging.WARNING, logger="app.api.auth.middleware"):
         for header in [None, "Bearer", f"Bearer {WRONG_TOKEN}", f"Basic {TOKEN}"]:
             await send_request(build_app(), "GET", "/private", header)
 
@@ -255,14 +255,14 @@ async def test_an_unknown_route_is_refused_before_it_is_routed():
 
 
 async def test_the_refusal_log_names_the_route_it_refused(caplog):
-    with caplog.at_level(logging.WARNING, logger="app.api.auth"):
+    with caplog.at_level(logging.WARNING, logger="app.api.auth.middleware"):
         await send_request(build_app(), "GET", "/private")
 
     assert "/private" in caplog.records[-1].getMessage()
 
 
 async def test_the_refusal_log_does_not_carry_the_checksum(caplog):
-    with caplog.at_level(logging.WARNING, logger="app.api.auth"):
+    with caplog.at_level(logging.WARNING, logger="app.api.auth.middleware"):
         await send_request(build_app(), "GET", f"/private?checksum={CHECKSUM}")
 
     messages = [record.getMessage() for record in caplog.records]
@@ -271,10 +271,14 @@ async def test_the_refusal_log_does_not_carry_the_checksum(caplog):
 
 async def test_the_auth_log_has_the_request_id(caplog):
     request_id = "auth-log-123"
-    with caplog.at_level(logging.WARNING, logger="app.api.auth"):
+    with caplog.at_level(logging.WARNING):
         await send_request(build_app(), "GET", "/private", request_id=request_id)
 
-    record = next(record for record in caplog.records if record.name == "app.api.auth")
+    record = next(
+        record
+        for record in caplog.records
+        if record.name.startswith("app.api.auth")
+    )
     assert record.request_id == request_id
 
 
