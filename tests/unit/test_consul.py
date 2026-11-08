@@ -9,6 +9,7 @@ from urllib.error import URLError
 import pytest
 
 import app.consul_agent as consul_agent
+import app.consul_registration as consul_registration_module
 import app.main as main
 from app.consul import ConsulConfigurationError, load_prefix
 from app.consul_agent import deregister_service, register_service
@@ -290,8 +291,8 @@ async def test_registration_runs_off_the_event_loop_thread(monkeypatch):
     def fake_register(**_kwargs):
         observed["thread"] = threading.current_thread()
 
-    monkeypatch.setattr(main, "register_service", fake_register)
+    monkeypatch.setattr(consul_registration_module, "register_service", fake_register)
 
-    await main._register_service_off_event_loop({})
+    await consul_registration_module.register_service_off_event_loop({})
 
     assert observed["thread"] is not threading.main_thread()

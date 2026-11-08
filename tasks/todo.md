@@ -594,3 +594,128 @@ Este servicio **cambia** el contrato. Antes de conectarlo:
 - [ ] **Readiness:** ¿TTL de caché configurable o fijo en 1 s?
 - [ ] **Retry Mongo:** ¿sin retry automático en escrituras, delegando en el orquestador?
 - [ ] **Rotación de token:** ¿fuera de alcance de esta release?
+
+---
+
+# Phase 7: Refactorización por límite de 100 líneas (KISS / YAGNI / SOLID / DRY)
+
+> Plan: [`plan.md`](./plan.md) · Diseño: [`../SPEC.md`](../SPEC.md)
+>
+> **Objetivo:** Ningún archivo de `app/` supere 100 líneas, respetando SRP y sin
+> cambiar el comportamiento observable ni el contrato HTTP del orquestador Go.
+> Los archivos de test de 150+ líneas se dejan por decisión del usuario.
+
+## Phase 7a: main.py y configuración
+
+### T7.1: Extraer lifespan, settings loader y consul registration de `main.py` ⬜
+- [ ] `main.py` tiene menos de 60 líneas
+- [ ] `app/lifespan.py` con contexto `lifespan`, signal handlers y Consul (~70 líneas)
+- [ ] `app/settings_loader.py` con `_settings_from_environment_or_consul()` (~20 líneas)
+- [ ] `app/consul_registration.py` con `_consul_registration()` y `_register_service_off_event_loop()` (~40 líneas)
+- [ ] `create_app(settings=None, connection=None)` sigue funcionando igual
+- [ ] `uv run pytest tests/unit/test_mongodb_lifecycle.py` verde
+**Verify:** `wc -l app/main.py` → < 60 · `uv run pytest` → todos pasan · `uv run ruff check app/main.py app/lifespan.py app/settings_loader.py app/consul_registration.py`
+**Deps:** — · **Scope:** Medium
+
+### T7.2: Dividir `config.py` en `settings.py`, `parsers.py`, `loader.py` ⬜
+- [ ] `app/config/settings.py` con `ConfigurationError` y `Settings` (< 40 líneas)
+- [ ] `app/config/parsers.py` con `_positive_integer`, `_log_level`, `_cors_origins` (< 50 líneas)
+- [ ] `app/config/loader.py` con `get_settings()` (< 45 líneas)
+- [ ] `app/config.py` reducido o re-export; `SERVICE_API_TOKEN` obligatorio sin default
+- [ ] `uv run pytest tests/unit/test_config.py` verde
+**Verify:** Cada archivo < 100 líneas · `uv run pytest tests/unit/test_config.py` → 19 passed · `uv run ruff check app/config/`
+**Deps:** T7.1 · **Scope:** Medium
+
+### Checkpoint 7a ⬜
+- [ ] `main.py` < 60 líneas
+- [ ] Cada módulo de config < 100 líneas
+- [ ] `uv run pytest` verde; `ruff check .` limpio
+
+
+## Phase 7b: Errores, servicio y routers
+
+### T7.3: Dividir `errors.py` en `base.py`, `domain.py`, `http.py`, `persistence.py` ⬜
+- [ ] `app/errors/base.py` con `ServiceError` (< 25 líneas)
+- [ ] `app/errors/domain.py` con `ChecksumAlreadyExistsError`, `TextNotFoundError`, `ImmutableFieldError` (< 40 líneas)
+- [ ] `app/errors/http.py` con `UnauthorizedError`, `ValidationError`, `PayloadTooLargeError`, `UnsupportedMediaTypeError`, `MethodNotAllowedError`, `ResourceNotFoundError` (< 45 líneas)
+- [ ] `app/errors/persistence.py` con `PersistenceError`, `DocumentTooLargeError`, `InternalError` (< 30 líneas)
+- [ ] `app/errors.py` reducido o re-export
+- [ ] `uv run pytest tests/unit/test_errors.py` verde (29 passed)
+**Verify:** Cada archivo < 100 líneas · `uv run pytest tests/unit/test_errors.py` → 29 passed · `rg "from app.errors import" app tests` resuelve
+**Deps:** — · **Scope:** Medium
+
+### T7.4: Extraer helpers de logging y not-found de `text_service.py` ⬜
+- [ ] `text_service.py` < 100 líneas (~85)
+- [ ] `_log_resource_change(operation, checksum)` usado por create/update/delete
+- [ ] `_require_found(item, checksum)` usado por find_by_checksum/update/delete
+- [ ] `uv run pytest tests/unit/services/test_text_service.py` verde (12 passed)
+**Verify:** `wc -l app/services/text_service.py` → < 100 · `uv run pytest tests/unit/services/test_text_service.py` → 12 passed
+**Deps:** T7.3 · **Scope:** Small
+
+### T7.5: Extraer `_read_json` y `_ok` de `routers/texts.py` a helpers compartidos ⬜
+- [ ] `routers/texts.py` < 100 líneas (~85)
+- [ ] `_read_json` movido a `app/api/validators/common.py` como `read_json_body(request)`
+- [ ] `_ok(checksum)` movido a helper de respuestas o inlinéado
+- [ ] `uv run pytest tests/integration/api/test_texts_endpoint.py` verde
+**Verify:** `wc -l app/api/routers/texts.py` → < 100 · `uv run pytest tests/integration/api/test_texts_endpoint.py` → 10 passed
+**Deps:** T7.4, T7.3 · **Scope:** Small
+
+### Checkpoint 7b ⬜
+- [ ] Cada módulo de errores < 100 líneas
+- [ ] `text_service.py` < 100 líneas; logging no se repite
+- [ ] `routers/texts.py` < 100 líneas
+- [ ] `uv run pytest` verde; `ruff check .` limpio
+
+
+## Phase 7c: Repositorios, auth y Consul
+
+### T7.6: Dividir `mongodb.py` en `mongodb_client.py` y `mongodb_collections.py` ⬜
+- [ ] `app/repositories/mongodb_client.py` con `MongoConnection`, `ClientFactory`, `_redact_uri` (< 85 líneas)
+- [ ] `app/repositories/mongodb_collections.py` con `texts()` y helpers (< 30 líneas)
+- [ ] `app/repositories/mongodb.py` reducido o re-export
+- [ ] `MongoConnection.is_available()` conserva caché de TTL
+- [ ] `uv run pytest tests/unit/test_mongodb_lifecycle.py` verde
+**Verify:** `wc -l app/repositories/mongodb_client.py` → < 100 · `wc -l app/repositories/mongodb_collections.py` → < 100 · `uv run pytest tests/unit/test_mongodb_lifecycle.py` verde
+**Deps:** T7.2, T7.3 · **Scope:** Medium
+
+### T7.7: Dividir `auth.py` en `tokens.py` y `middleware.py` ⬜
+- [ ] `app/api/auth/tokens.py` con `BEARER_SCHEME`, `PUBLIC_PATHS`, `rejection_reason()`, `unauthorized_response()` (< 55 líneas)
+- [ ] `app/api/auth/middleware.py` con `BearerAuthMiddleware` (< 55 líneas)
+- [ ] `app/api/auth.py` reducido o re-export
+- [ ] `/health` y `/readyz` abiertos; `/texts` protegido
+- [ ] `uv run pytest tests/unit/api/test_auth.py` verde (29 passed)
+**Verify:** `wc -l app/api/auth/tokens.py` → < 100 · `wc -l app/api/auth/middleware.py` → < 100 · `uv run pytest tests/unit/api/test_auth.py` → 29 passed
+**Deps:** T7.3, T7.2 · **Scope:** Small
+
+### T7.8: Extraer lógica de request con retry de `consul_agent.py` a `consul_request.py` ⬜
+- [ ] `app/consul_request.py` con `_request()` con retry/backoff (< 60 líneas)
+- [ ] `app/consul_agent.py` solo `register_service()` y `deregister_service()` (< 50 líneas)
+- [ ] `ConsulConfigurationError` en vez de `KeyError`/`TypeError` ante KV malformado
+- [ ] `uv run pytest tests/unit/test_consul.py` verde
+**Verify:** `wc -l app/consul_agent.py` → < 100 · `wc -l app/consul_request.py` → < 100 · `uv run pytest tests/unit/test_consul.py` verde
+**Deps:** T7.1 · **Scope:** Small
+
+### Checkpoint 7c ⬜
+- [ ] Cada módulo de repositorio < 100 líneas
+- [ ] Cada módulo de auth < 100 líneas
+- [ ] `consul_agent.py` < 100 líneas
+- [ ] `uv run pytest` verde; `ruff check .` limpio
+
+
+## Phase 7d: Verificación final
+
+### T7.9: Verificación de límite de 100 líneas en todos los archivos de producción ⬜
+- [ ] Cada archivo en `app/` ≤ 100 líneas, excepto `app/api/middleware.py` (188), `app/repositories/mongo_text_repository.py` (156), `app/api/schemas.py` (150)
+- [ ] `uv run pytest --cov=app --cov-fail-under=85` pasa
+- [ ] `uv run ruff check .` y `uv run ruff format --check .` pasan
+- [ ] Contrato HTTP del orquestador Go sin cambios
+**Verify:** `python -c "from pathlib import Path; [print(f, len(f.read_text().splitlines())) for f in Path('app').rglob('*.py') if len(f.read_text().splitlines()) > 100]"` → solo los 3 exceptuados · `uv run pytest --cov=app --cov-fail-under=85` verde · `uv run ruff check . && uv run ruff format --check .` limpio
+**Deps:** T7.1–T7.8 · **Scope:** Small
+
+### Checkpoint Final (Phase 7) ⬜
+- [ ] Ningún archivo de `app/` supera 100 líneas (excepto los 150+ dejados por decisión del usuario)
+- [ ] `uv run pytest --cov=app --cov-fail-under=85` pasa
+- [ ] `uv run ruff check .` y `uv run ruff format --check .` pasan
+- [ ] El contrato HTTP del orquestador Go no cambió
+- [ ] Revisión humana aprobada
+

@@ -1609,3 +1609,309 @@ curl -i -X DELETE -H "Authorization: Bearer $TOKEN" \
       `ruff format --check` pasan.
 - [ ] README/SPEC coinciden con el código.
 - [ ] Revisión humana aprobada antes de reintentar el despliegue.
+# Phase 7: Refactorización por límite de 100 líneas (KISS / YAGNI / SOLID / DRY)
+
+> **Origen:** Auditoría de diseño sobre la base de código implementada (v2 + v3).
+> **Objetivo:** Ningún archivo de producción supere 100 líneas, respetando SRP y sin
+> cambiar el comportamiento observable ni el contrato HTTP del orquestador Go.
+> **Regla:** Cada tarea se ejecuta con TDD (test primero) y deja el sistema en verde.
+
+## Overview
+
+La auditoría detectó 8 archivos de producción por encima del umbral de 100 líneas
+(2 de ellos en el borde, 108 y 110). Los archivos de test de 150+ líneas se dejan
+tal como están por decisión del usuario. La estrategia es extraer responsabilidades
+en módulos nuevos, cada uno con una sola razón de cambio, manteniendo la arquitectura
+de 3 capas (`api → services → repositories`) y la inversión de dependencias.
+
+Archivos objetivo (> 100 líneas):
+
+| Archivo | Líneas | Acción |
+|---------|--------|--------|
+| `app/main.py` | 210 | Extraer lifespan, settings loader y consul registration |
+| `app/config.py` | 125 | Dividir en `settings.py`, `parsers.py`, `loader.py` |
+| `app/errors.py` | 131 | Dividir en `base.py`, `domain.py`, `http.py`, `persistence.py` |
+| `app/services/text_service.py` | 124 | Extraer helpers de logging y not-found |
+| `app/api/routers/texts.py` | 116 | Extraer `_read_json` y `_ok` a helpers compartidos |
+| `app/repositories/mongodb.py` | 112 | Dividir en `mongodb_client.py` y `mongodb_collections.py` |
+| `app/api/auth.py` | 110 | Dividir en `tokens.py` y `middleware.py` |
+| `app/consul_agent.py` | 108 | Extraer lógica de request con retry a `consul_request.py` |
+
+Archivos que se dejan sin tocar (150+ líneas, por decisión del usuario):
+- `app/api/middleware.py` (188), `app/repositories/mongo_text_repository.py` (156),
+  `app/api/schemas.py` (150).
+
+---
+
+## Task List — Phase 7
+
+### Phase 7a: main.py y configuración
+
+- [ ] **T7.1: Extraer lifespan, settings loader y consul registration de `main.py`**
+- [ ] **T7.2: Dividir `config.py` en `settings.py`, `parsers.py`, `loader.py`**
+
+### Checkpoint 7a
+- [ ] `main.py` tiene menos de 60 líneas
+- [ ] `app/config/` (o módulos sueltos) cada uno con menos de 100 líneas
+- [ ] `uv run pytest` verde; `ruff check .` limpio
+
+### Phase 7b: Errores, servicio y routers
+
+- [ ] **T7.3: Dividir `errors.py` en `base.py`, `domain.py`, `http.py`, `persistence.py`**
+- [ ] **T7.4: Extraer helpers de logging y not-found de `text_service.py`**
+- [ ] **T7.5: Extraer `_read_json` y `_ok` de `routers/texts.py` a helpers compartidos**
+
+### Checkpoint 7b
+- [ ] Cada módulo de errores tiene menos de 100 líneas
+- [ ] `text_service.py` tiene menos de 100 líneas; logging no se repite
+- [ ] `routers/texts.py` tiene menos de 100 líneas
+- [ ] `uv run pytest` verde; `ruff check .` limpio
+
+### Phase 7c: Repositorios, auth y Consul
+
+- [ ] **T7.6: Dividir `mongodb.py` en `mongodb_client.py` y `mongodb_collections.py`**
+- [ ] **T7.7: Dividir `auth.py` en `tokens.py` y `middleware.py`**
+- [ ] **T7.8: Extraer lógica de request con retry de `consul_agent.py` a `consul_request.py`**
+
+### Checkpoint 7c
+- [ ] Cada módulo de repositorio tiene menos de 100 líneas
+- [ ] Cada módulo de auth tiene menos de 100 líneas
+- [ ] `consul_agent.py` tiene menos de 100 líneas
+- [ ] `uv run pytest` verde; `ruff check .` limpio
+
+### Phase 7d: Verificación final
+
+- [ ] **T7.9: Verificación de límite de 100 líneas en todos los archivos de producción**
+
+### Checkpoint Final (Phase 7)
+- [ ] Ningún archivo de `app/` supera 100 líneas (excepto los 150+ dejados por decisión del usuario)
+- [ ] `uv run pytest --cov=app --cov-fail-under=85` pasa
+- [ ] `uv run ruff check .` y `uv run ruff format --check .` pasan
+- [ ] El contrato HTTP del orquestador Go no cambió
+- [ ] Revisión humana aprobada
+
+---
+
+## Task Detail — Phase 7
+
+### T7.1: Extraer lifespan, settings loader y consul registration de `main.py`
+
+**Descripción:** `app/main.py` (210 líneas) hace demasiadas cosas a la vez: resolución
+de settings (env o Consul), registro Consul, manejo de señales (SIGTERM/SIGINT),
+lifespan de FastAPI (arranque/apagado de MongoDB), composición de la app, registro
+de middlewares y routers. Se extraen tres módulos nuevos y `main.py` queda solo como
+composition root.
+
+**Acceptance criteria:**
+- [ ] `main.py` tiene menos de 60 líneas
+- [ ] `app/lifespan.py` contiene el contexto `lifespan`, signal handlers y registro/deregistro Consul (~70 líneas)
+- [ ] `app/settings_loader.py` contiene `_settings_from_environment_or_consul()` (~20 líneas)
+- [ ] `app/consul_registration.py` contiene `_consul_registration()` y `_register_service_off_event_loop()` (~40 líneas)
+- [ ] `create_app(settings=None, connection=None)` sigue funcionando igual
+- [ ] `uv run pytest tests/unit/test_mongodb_lifecycle.py` verde (el lifespan se prueba desde allí)
+
+**Verification:**
+- [ ] `wc -l app/main.py` → < 60
+- [ ] `uv run pytest` → todos pasan
+- [ ] `uv run ruff check app/main.py app/lifespan.py app/settings_loader.py app/consul_registration.py`
+
+**Dependencies:** Ninguna (v2/v3 completados)
+**Files likely touched:** `app/main.py`, `app/lifespan.py` (nuevo), `app/settings_loader.py` (nuevo), `app/consul_registration.py` (nuevo), `tests/unit/test_mongodb_lifecycle.py`
+**Estimated scope:** Medium
+
+
+### T7.2: Dividir `config.py` en `settings.py`, `parsers.py`, `loader.py`
+
+**Descripción:** `app/config.py` (125 líneas) mezcla helpers de validación
+(`_positive_integer`, `_log_level`, `_cors_origins`), la dataclass `Settings` y la
+función `get_settings`. Se separan por responsabilidad: definición del modelo de
+datos, parsers de variables de entorno y carga de configuración.
+
+**Acceptance criteria:**
+- [ ] `app/config/settings.py` contiene `ConfigurationError` y `Settings` (< 40 líneas)
+- [ ] `app/config/parsers.py` contiene `_positive_integer`, `_log_level`, `_cors_origins` (< 50 líneas)
+- [ ] `app/config/loader.py` contiene `get_settings()` (< 45 líneas)
+- [ ] `app/config.py` puede eliminarse o convertirse en re-export para no romper imports existentes
+- [ ] `SERVICE_API_TOKEN` sigue obligatorio sin default
+- [ ] `uv run pytest tests/unit/test_config.py` verde
+
+**Verification:**
+- [ ] Cada archivo nuevo tiene < 100 líneas
+- [ ] `uv run pytest tests/unit/test_config.py` → 19 passed
+- [ ] `uv run ruff check app/config/`
+
+**Dependencies:** T7.1 (settings_loader importa de config)
+**Files likely touched:** `app/config/settings.py` (nuevo), `app/config/parsers.py` (nuevo), `app/config/loader.py` (nuevo), `app/config.py` (reducido o re-export), `app/settings_loader.py`, `tests/unit/test_config.py`
+**Estimated scope:** Medium
+
+---
+
+### T7.3: Dividir `errors.py` en `base.py`, `domain.py`, `http.py`, `persistence.py`
+
+**Descripción:** `app/errors.py` (131 líneas) concentra todas las excepciones del
+servicio. Se agrupan por dominio de responsabilidad: clase base, errores de dominio
+(de negocio), errores HTTP (4xx) y errores de persistencia (5xx).
+
+**Acceptance criteria:**
+- [ ] `app/errors/base.py` contiene `ServiceError` (< 25 líneas)
+- [ ] `app/errors/domain.py` contiene `ChecksumAlreadyExistsError`, `TextNotFoundError`, `ImmutableFieldError` (< 40 líneas)
+- [ ] `app/errors/http.py` contiene `UnauthorizedError`, `ValidationError`, `PayloadTooLargeError`, `UnsupportedMediaTypeError`, `MethodNotAllowedError`, `ResourceNotFoundError` (< 45 líneas)
+- [ ] `app/errors/persistence.py` contiene `PersistenceError`, `DocumentTooLargeError`, `InternalError` (< 30 líneas)
+- [ ] `app/errors.py` puede eliminarse o re-exportar para no romper imports existentes
+- [ ] `uv run pytest tests/unit/test_errors.py` verde (29 passed)
+
+**Verification:**
+- [ ] Cada archivo tiene < 100 líneas
+- [ ] `uv run pytest tests/unit/test_errors.py` → 29 passed
+- [ ] `rg "from app.errors import" app tests` → todos los imports resuelven
+
+**Dependencies:** Ninguna
+**Files likely touched:** `app/errors/base.py` (nuevo), `app/errors/domain.py` (nuevo), `app/errors/http.py` (nuevo), `app/errors/persistence.py` (nuevo), `app/errors.py` (reducido o re-export), `tests/unit/test_errors.py`
+**Estimated scope:** Medium
+
+---
+
+### T7.4: Extraer helpers de logging y not-found de `text_service.py`
+
+**Descripción:** `app/services/text_service.py` (124 líneas) repite el patrón de
+logging (`hashlib.sha256`, `request_id_context`, `resource_changed`) en `create`,
+`update` y `delete`, y repite la lógica de "not found" en `find_by_checksum` y
+`update`. Se extraen helpers privados para eliminar duplicación (DRY).
+
+**Acceptance criteria:**
+- [ ] `text_service.py` tiene menos de 100 líneas (~85)
+- [ ] Existe `_log_resource_change(operation, checksum)` usado por create/update/delete
+- [ ] Existe `_require_found(item, checksum)` usado por find_by_checksum/update/delete
+- [ ] El logging de negocio conserva `request_id`, checksum hasheado y operación
+- [ ] `uv run pytest tests/unit/services/test_text_service.py` verde (12 passed)
+
+**Verification:**
+- [ ] `wc -l app/services/text_service.py` → < 100
+- [ ] `uv run pytest tests/unit/services/test_text_service.py` → 12 passed
+- [ ] `rg "hashlib.sha256\(command.checksum|hashlib.sha256\(checksum" app/services/text_service.py` → una sola definición en helper
+
+**Dependencies:** T7.3 (importa de app.errors)
+**Files likely touched:** `app/services/text_service.py`, `tests/unit/services/test_text_service.py`
+**Estimated scope:** Small
+
+
+---
+
+### T7.5: Extraer `_read_json` y `_ok` de `routers/texts.py` a helpers compartidos
+
+**Descripción:** `app/api/routers/texts.py` (116 líneas) define helpers locales
+`_read_json` y `_ok` que podrían vivir en `app/api/validators/common.py` y un módulo
+de respuestas. Los 4 endpoints repiten el patrón `validate → service → JSONResponse`.
+
+**Acceptance criteria:**
+- [ ] `routers/texts.py` tiene menos de 100 líneas (~85)
+- [ ] `_read_json` se movió a `app/api/validators/common.py` como `read_json_body(request)`
+- [ ] `_ok(checksum)` se movió a un helper de respuestas (o se inlinéa en cada endpoint)
+- [ ] `require_str(checksum)` se sigue importando de `validators.common`
+- [ ] `uv run pytest tests/integration/api/test_texts_endpoint.py` verde
+
+**Verification:**
+- [ ] `wc -l app/api/routers/texts.py` → < 100
+- [ ] `uv run pytest tests/integration/api/test_texts_endpoint.py` → 10 passed
+- [ ] `uv run pytest tests/unit/api/validators/test_common.py` → verde
+
+**Dependencies:** T7.4 (usa text_service), T7.3 (errores)
+**Files likely touched:** `app/api/routers/texts.py`, `app/api/validators/common.py`, `tests/integration/api/test_texts_endpoint.py`, `tests/unit/api/validators/test_common.py`
+**Estimated scope:** Small
+
+---
+
+### T7.6: Dividir `mongodb.py` en `mongodb_client.py` y `mongodb_collections.py`
+
+**Descripción:** `app/repositories/mongodb.py` (112 líneas) mezcla creación del
+cliente, caché de readiness, redacción de URI y acceso a colección. Se separa en
+cliente (ciclo de vida) y colecciones (acceso a datos).
+
+**Acceptance criteria:**
+- [ ] `app/repositories/mongodb_client.py` contiene `MongoConnection`, `ClientFactory`, `_redact_uri` (< 85 líneas)
+- [ ] `app/repositories/mongodb_collections.py` contiene `texts()` y helpers de colección (< 30 líneas)
+- [ ] `app/repositories/mongodb.py` puede eliminarse o re-exportar
+- [ ] `MongoConnection.is_available()` conserva el caché de TTL
+- [ ] `uv run pytest tests/unit/test_mongodb_lifecycle.py` verde
+
+**Verification:**
+- [ ] `wc -l app/repositories/mongodb_client.py` → < 100
+- [ ] `wc -l app/repositories/mongodb_collections.py` → < 100
+- [ ] `uv run pytest tests/unit/test_mongodb_lifecycle.py` → verde
+- [ ] `rg "from app.repositories.mongodb import" app tests` → resuelve
+
+**Dependencies:** T7.2 (config), T7.3 (errores)
+**Files likely touched:** `app/repositories/mongodb_client.py` (nuevo), `app/repositories/mongodb_collections.py` (nuevo), `app/repositories/mongodb.py` (reducido o re-export), `app/main.py`, `tests/unit/test_mongodb_lifecycle.py`
+**Estimated scope:** Medium
+
+---
+
+### T7.7: Dividir `auth.py` en `tokens.py` y `middleware.py`
+
+**Descripción:** `app/api/auth.py` (110 líneas, en el borde) mezcla lógica de validación
+de token (`rejection_reason`, `unauthorized_response`) con el middleware Bearer. Se
+separa para que cada archivo tenga una sola responsabilidad.
+
+**Acceptance criteria:**
+- [ ] `app/api/auth/tokens.py` contiene `BEARER_SCHEME`, `PUBLIC_PATHS`, `REJECTION_DETAIL`, `rejection_reason()`, `unauthorized_response()` (< 55 líneas)
+- [ ] `app/api/auth/middleware.py` contiene `BearerAuthMiddleware` (< 55 líneas)
+- [ ] `app/api/auth.py` puede eliminarse o re-exportar
+- [ ] `/health` y `/readyz` siguen abiertos; `/texts` protegido
+- [ ] `uv run pytest tests/unit/api/test_auth.py` verde (29 passed)
+
+**Verification:**
+- [ ] `wc -l app/api/auth/tokens.py` → < 100
+- [ ] `wc -l app/api/auth/middleware.py` → < 100
+- [ ] `uv run pytest tests/unit/api/test_auth.py` → 29 passed
+- [ ] `uv run ruff check app/api/auth/`
+
+**Dependencies:** T7.3 (errors), T7.2 (config)
+**Files likely touched:** `app/api/auth/tokens.py` (nuevo), `app/api/auth/middleware.py` (nuevo), `app/api/auth.py` (reducido o re-export), `app/main.py`, `tests/unit/api/test_auth.py`
+**Estimated scope:** Small
+
+---
+
+### T7.8: Extraer lógica de request con retry de `consul_agent.py` a `consul_request.py`
+
+**Descripción:** `app/consul_agent.py` (108 líneas, en el borde) mezcla las peticiones
+HTTP de registro/deregistro con la lógica de reintentos y backoff exponencial. Se
+extrae el helper de request con retry a su propio módulo.
+
+**Acceptance criteria:**
+- [ ] `app/consul_request.py` contiene `_request()` con retry/backoff y validación de parámetros (< 60 líneas)
+- [ ] `app/consul_agent.py` contiene solo `register_service()` y `deregister_service()` como orquestadores (< 50 líneas)
+- [ ] `ConsulConfigurationError` se lanza en vez de `KeyError`/`TypeError` ante KV malformado
+- [ ] `uv run pytest tests/unit/test_consul.py` verde
+
+**Verification:**
+- [ ] `wc -l app/consul_agent.py` → < 100
+- [ ] `wc -l app/consul_request.py` → < 100
+- [ ] `uv run pytest tests/unit/test_consul.py` → verde
+
+**Dependencies:** T7.1 (main.py usa consul_agent)
+**Files likely touched:** `app/consul_request.py` (nuevo), `app/consul_agent.py` (reducido), `tests/unit/test_consul.py`
+**Estimated scope:** Small
+
+---
+
+### T7.9: Verificación de límite de 100 líneas en todos los archivos de producción
+
+**Descripción:** Recorre todos los archivos `.py` bajo `app/` y confirma que ninguno
+supera 100 líneas (salvo los 150+ dejados por decisión del usuario). Ejecuta la suite
+completa y el linter para asegurar que la refactorización no rompió nada.
+
+**Acceptance criteria:**
+- [ ] `wc -l` de cada archivo en `app/` es ≤ 100, excepto `app/api/middleware.py` (188), `app/repositories/mongo_text_repository.py` (156), `app/api/schemas.py` (150) dejados por decisión del usuario
+- [ ] `uv run pytest --cov=app --cov-fail-under=85` pasa
+- [ ] `uv run ruff check .` y `uv run ruff format --check .` pasan
+- [ ] El contrato HTTP del orquestador Go no cambió (misma matriz de errores, mismos status codes)
+
+**Verification:**
+- [ ] Script de verificación: `python -c "from pathlib import Path; [print(f, len(f.read_text().splitlines())) for f in Path('app').rglob('*.py') if len(f.read_text().splitlines()) > 100]"` → solo los 3 exceptuados
+- [ ] `uv run pytest --cov=app --cov-fail-under=85` → verde
+- [ ] `uv run ruff check . && uv run ruff format --check .` → limpio
+
+**Dependencies:** T7.1–T7.8
+**Files likely touched:** Ninguno (solo verificación); posiblemente `tasks/todo.md` y `tasks/plan.md`
+**Estimated scope:** Small
+
