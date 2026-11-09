@@ -11,7 +11,6 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 
 from app.errors import ChecksumAlreadyExistsError, TextNotFoundError
-from app.services.audit_logger import log_resource_change, require_found
 from app.use_cases.ports import (
     CreateTextCommand,
     StoredText,
@@ -61,7 +60,6 @@ class TextService:
                 updated_at=now,
             )
         )
-        log_resource_change("create", command.checksum)
 
     async def find_by_checksum(self, checksum: str) -> StoredText:
         """Devuelve el texto almacenado, o lanza TextNotFoundError.
@@ -72,7 +70,10 @@ class TextService:
         Returns:
             El texto almacenado encontrado.
         """
-        return require_found(await self._repository.get_by_checksum(checksum), checksum)
+        item = await self._repository.get_by_checksum(checksum)
+        if item is None:
+            raise TextNotFoundError(f"no text with checksum {checksum!r}")
+        return item
 
     async def update(self, checksum: str, changes: TextChanges) -> StoredText:
         """Aplica los cambios y devuelve el texto actualizado.
@@ -84,8 +85,9 @@ class TextService:
         Returns:
             El texto actualizado.
         """
-        item = require_found(await self._repository.update(checksum, changes), checksum)
-        log_resource_change("update", checksum)
+        item = await self._repository.update(checksum, changes)
+        if item is None:
+            raise TextNotFoundError(f"no text with checksum {checksum!r}")
         return item
 
     async def delete(self, checksum: str) -> None:
@@ -99,4 +101,3 @@ class TextService:
         """
         if not await self._repository.delete(checksum):
             raise TextNotFoundError(f"no text with checksum {checksum!r}")
-        log_resource_change("delete", checksum)

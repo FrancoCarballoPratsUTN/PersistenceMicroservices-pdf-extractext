@@ -2,35 +2,12 @@
 
 from __future__ import annotations
 
-import logging
-
 import pytest
 
 from app.errors import TextNotFoundError
-from app.request_context import request_id_context
 from app.use_cases.ports import TextChanges
 from tests.unit.services.conftest import _command, _service, NOW
 from tests.fakes.fake_text_repository import FakeTextRepository
-
-
-async def test_update_and_delete_logs_have_request_id(caplog) -> None:
-    repository = FakeTextRepository()
-    service = _service(repository)
-    await service.create(_command())
-    context_token = request_id_context.set("request-456")
-
-    try:
-        with caplog.at_level(logging.INFO, logger="app.services.audit_logger"):
-            await service.update("abc123", TextChanges(name="new name"))
-            await service.delete("abc123")
-
-        assert "operation=update" in caplog.text
-        assert "operation=delete" in caplog.text
-        assert caplog.text.count("result=success") == 2
-        assert caplog.text.count("request_id=request-456") == 2
-        assert "new name" not in caplog.text
-    finally:
-        request_id_context.reset(context_token)
 
 
 async def test_the_updated_text_is_returned() -> None:

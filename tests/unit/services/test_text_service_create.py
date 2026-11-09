@@ -2,34 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
-import logging
-
 import pytest
 
 from app.errors import ChecksumAlreadyExistsError, PersistenceError
-from app.request_context import request_id_context
 from tests.unit.services.conftest import _command, _service, NOW
 from tests.fakes.fake_text_repository import FakeTextRepository
-
-
-async def test_create_log_has_request_id_and_safe_checksum(caplog) -> None:
-    context_token = request_id_context.set("request-123")
-    command = _command(text="private body", metadata={"secret": "private data"})
-
-    try:
-        with caplog.at_level(logging.INFO, logger="app.services.audit_logger"):
-            await _service(FakeTextRepository()).create(command)
-
-        message = caplog.text
-        assert "request_id=request-123" in message
-        assert "result=success" in message
-        assert hashlib.sha256(b"abc123").hexdigest()[:12] in message
-        assert "abc123" not in message
-        assert "private body" not in message
-        assert "private data" not in message
-    finally:
-        request_id_context.reset(context_token)
 
 
 async def test_a_new_text_is_stored_with_both_timestamps() -> None:
