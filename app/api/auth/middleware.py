@@ -28,6 +28,15 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
     """
 
     def __init__(self, app: ASGIApp, *, settings: Settings) -> None:
+        """Guarda el siguiente manejador y el token de autenticación.
+
+        Args:
+            app: El siguiente manejador de la cadena.
+            settings: Aporta el token con el que comparar.
+
+        Returns:
+            Ninguno.
+        """
         super().__init__(app)
         self._token = settings.service_api_token
 

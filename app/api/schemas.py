@@ -1,3 +1,10 @@
+"""Esquemas OpenAPI de la API: componentes, respuestas y cuerpos de petición.
+
+Genera y publica los esquemas de OpenAPI (Text, CreateText, UpdateText,
+Acknowledgement, Probe, Problem) junto con los códigos de error y los cuerpos
+de respuesta Problem+JSON.
+"""
+
 from typing import Any
 
 from fastapi import FastAPI
@@ -20,6 +27,11 @@ SECURITY: list[dict[str, list[str]]] = [{BEARER: []}]
 
 
 def _codes() -> list[str]:
+    """Recopila los códigos de error de todas las subclases de ServiceError.
+
+    Returns:
+        Lista ordenada de códigos de error únicos.
+    """
     codes: set[str] = set()
 
     def add_subclass_codes(error_type: type[ServiceError]) -> None:
@@ -96,18 +108,51 @@ _PYDANTIC_VALIDATION_SCHEMAS = ("HTTPValidationError", "ValidationError")
 
 
 def _ref(name: str) -> dict[str, str]:
+    """Construye una referencia OpenAPI a un esquema por nombre.
+
+    Args:
+        name: Nombre del esquema en ``components/schemas``.
+
+    Returns:
+        Diccionario de referencia ``$ref``.
+    """
     return {"$ref": f"#/components/schemas/{name}"}
 
 
 def accepts(name: str) -> dict[str, Any]:
+    """Construye el cuerpo de petición requerido para un esquema dado.
+
+    Args:
+        name: Nombre del esquema del cuerpo de petición.
+
+    Returns:
+        Esquema de cuerpo de petición con el contenido JSON.
+    """
     return {"required": True, "content": {JSON: {"schema": _ref(name)}}}
 
 
 def answered_with(name: str, description: str) -> dict[str, Any]:
+    """Construye la descripción de una respuesta exitosa para un esquema.
+
+    Args:
+        name: Nombre del esquema de respuesta.
+        description: Descripción de la respuesta.
+
+    Returns:
+        Esquema de respuesta con el contenido JSON.
+    """
     return {"description": description, "content": {JSON: {"schema": _ref(name)}}}
 
 
 def failing_with(*statuses: str) -> dict[str, Any]:
+    """Construye las descripciones de respuestas de error para varios estados.
+
+    Args:
+        *statuses: Códigos de estado HTTP de las respuestas de error.
+
+    Returns:
+        Diccionario con las respuestas de error claveadas por código de estado.
+    """
     return {
         status: {
             "description": _FAILURES[status],
@@ -118,6 +163,14 @@ def failing_with(*statuses: str) -> dict[str, Any]:
 
 
 def _drop_pydantic_validation(document: dict[str, Any]) -> None:
+    """Elimina los esquemas de validación de Pydantic del documento OpenAPI.
+
+    Args:
+        document: Documento OpenAPI generado por FastAPI.
+
+    Returns:
+        Ninguno.
+    """
     for path in document.get("paths", {}).values():
         for operation in path.values():
             operation.get("responses", {}).pop("422", None)
@@ -127,6 +180,14 @@ def _drop_pydantic_validation(document: dict[str, Any]) -> None:
 
 
 def _require_the_checksum(document: dict[str, Any]) -> None:
+    """Marca como obligatorio el parámetro ``checksum`` en todas las operaciones.
+
+    Args:
+        document: Documento OpenAPI generado por FastAPI.
+
+    Returns:
+        Ninguno.
+    """
     for path in document.get("paths", {}).values():
         for operation in path.values():
             for parameter in operation.get("parameters", []):
@@ -136,6 +197,14 @@ def _require_the_checksum(document: dict[str, Any]) -> None:
 
 
 def publish(app: FastAPI) -> None:
+    """Publica los esquemas personalizados en el OpenAPI de la aplicación.
+
+    Args:
+        app: Instancia de la aplicación FastAPI.
+
+    Returns:
+        Ninguno.
+    """
     generated = app.openapi
 
     def openapi() -> dict[str, Any]:

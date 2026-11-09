@@ -11,7 +11,14 @@ logger = logging.getLogger(__name__)
 
 
 def checksum_hash(checksum: str) -> str:
-    """Devuelve los primeros 12 caracteres del hash SHA-256 de un checksum."""
+    """Devuelve los primeros 12 caracteres del hash SHA-256 de un checksum.
+
+    Args:
+        checksum: Checksum del texto a hashear.
+
+    Returns:
+        Los primeros 12 caracteres del hash SHA-256 del checksum.
+    """
     return hashlib.sha256(checksum.encode("utf-8")).hexdigest()[:12]
 
 
@@ -21,6 +28,9 @@ def log_resource_change(operation: str, checksum: str) -> None:
     Args:
         operation: Nombre de la operación (create, update, delete).
         checksum: Checksum del texto afectado (se hashea antes de loguear).
+
+    Returns:
+        Ninguno.
     """
     logger.info(
         "resource_changed operation=%s result=success checksum_hash=%s request_id=%s",

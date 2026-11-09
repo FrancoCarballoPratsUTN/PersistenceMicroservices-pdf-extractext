@@ -44,7 +44,15 @@ def consul_registration() -> dict[str, object] | None:
 async def register_service_off_event_loop(
     registration: dict[str, object],
 ) -> None:
-    """Registrar en Consul sin bloquear el event loop durante el arranque."""
+    """Registrar en Consul sin bloquear el event loop durante el arranque.
+
+    Args:
+        registration: Diccionario de registro obtenido de
+            :func:`consul_registration`.
+
+    Returns:
+        Ninguno.
+    """
     await asyncio.to_thread(register_service, **registration)
 
 
@@ -61,6 +69,9 @@ def deregister_consul_service(
         deregistered_flag: Diccionario con la clave ``"value"`` usada como
             bandera mutable para evitar doble deregistro.
         logger: Instancia de logger para registrar errores de deregistro.
+
+    Returns:
+        Ninguno.
     """
     if deregistered_flag.get("value") or registration is None:
         return

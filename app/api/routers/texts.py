@@ -1,3 +1,10 @@
+"""Routers HTTP para el recurso de textos.
+
+Define los endpoints GET, POST, PUT y DELETE sobre ``/texts``. Los handlers se
+mantienen finos: leen y validan la petición, delegan en el servicio, y traducen
+el resultado a una respuesta. No contienen reglas de negocio.
+"""
+
 from __future__ import annotations
 
 from urllib.parse import quote
@@ -32,6 +39,15 @@ async def get_text(
     checksum: str | None = None,
     service: TextService = Depends(get_text_service),
 ) -> JSONResponse:
+    """Obtiene un texto por su checksum.
+
+    Args:
+        checksum: Checksum del texto a recuperar.
+        service: Servicio de textos inyectado por dependencia.
+
+    Returns:
+        Respuesta JSON con el texto serializado.
+    """
     item = await service.find_by_checksum(require_str(checksum))
     return JSONResponse(content=to_api_dict(item))
 
@@ -52,6 +68,15 @@ async def create_text(
     request: Request,
     service: TextService = Depends(get_text_service),
 ) -> JSONResponse:
+    """Crea un nuevo texto a partir del cuerpo de la petición.
+
+    Args:
+        request: Petición entrante con el cuerpo JSON del texto.
+        service: Servicio de textos inyectado por dependencia.
+
+    Returns:
+        Respuesta JSON 201 con el acknowledge y el checksum.
+    """
     command = validate_create(await read_json_body(request))
     await service.create(command)
     return JSONResponse(
@@ -77,6 +102,16 @@ async def update_text(
     checksum: str | None = None,
     service: TextService = Depends(get_text_service),
 ) -> JSONResponse:
+    """Actualiza un texto existente con los cambios proporcionados.
+
+    Args:
+        request: Petición entrante con el cuerpo JSON de cambios.
+        checksum: Checksum del texto a actualizar.
+        service: Servicio de textos inyectado por dependencia.
+
+    Returns:
+        Respuesta JSON con el texto actualizado serializado.
+    """
     changes = validate_update(await read_json_body(request))
     item = await service.update(require_str(checksum), changes)
     return JSONResponse(content=to_api_dict(item))
@@ -96,5 +131,14 @@ async def delete_text(
     checksum: str | None = None,
     service: TextService = Depends(get_text_service),
 ) -> JSONResponse:
+    """Elimina un texto por su checksum.
+
+    Args:
+        checksum: Checksum del texto a eliminar.
+        service: Servicio de textos inyectado por dependencia.
+
+    Returns:
+        Respuesta JSON con el acknowledge y el checksum.
+    """
     await service.delete(require_str(checksum))
     return JSONResponse(content=ok_response(checksum))

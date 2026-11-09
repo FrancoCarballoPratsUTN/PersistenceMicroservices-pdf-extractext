@@ -18,7 +18,23 @@ def register_service(
     timeout: float = 5.0,
     ca_file: str | None = None,
 ) -> None:
-    """Registra el servicio actual en el agente Consul."""
+    """Registra el servicio actual en el agente Consul.
+
+    Args:
+        address: Dirección del agente Consul.
+        token: Token de ACL de Consul.
+        service_id: Identificador único del servicio.
+        service_name: Nombre del servicio.
+        service_address: Dirección bajo la que se expone el servicio.
+        service_port: Puerto bajo el que se expone el servicio.
+        check_url: URL del chequeo de salud del servicio.
+        tags: Etiquetas opcionales del servicio.
+        timeout: Tiempo de espera en segundos para la petición.
+        ca_file: Ruta opcional al certificado CA para TLS.
+
+    Returns:
+        Ninguno.
+    """
     payload = {
         "ID": service_id,
         "Name": service_name,
@@ -50,7 +66,18 @@ def deregister_service(
     timeout: float = 5.0,
     ca_file: str | None = None,
 ) -> None:
-    """Deregistra el servicio actual del agente Consul."""
+    """Deregistra el servicio actual del agente Consul.
+
+    Args:
+        address: Dirección del agente Consul.
+        token: Token de ACL de Consul.
+        service_id: Identificador único del servicio a deregistrar.
+        timeout: Tiempo de espera en segundos para la petición.
+        ca_file: Ruta opcional al certificado CA para TLS.
+
+    Returns:
+        Ninguno.
+    """
     if not service_id.strip():
         from app.consul import ConsulConfigurationError
 

@@ -22,6 +22,15 @@ class MongoConnection:
     def __init__(
         self, settings: Settings, client_factory: ClientFactory = AsyncMongoClient
     ) -> None:
+        """Guarda la configuración y prepara el cliente de MongoDB.
+
+        Args:
+            settings: Ajustes del servicio (URI, timeouts, pool, base de datos).
+            client_factory: Fábrica para crear el cliente asíncrono de pymongo.
+
+        Returns:
+            Ninguno.
+        """
         self._settings = settings
         self._client_factory = client_factory
         self._client: AsyncMongoClient | None = None
@@ -85,6 +94,7 @@ class MongoConnection:
         return available
 
     def _database(self) -> Any:
+        """Devuelve la base de datos de MongoDB configurada."""
         return self._client[self._settings.mongo_database]
 
     def texts(self) -> Any:

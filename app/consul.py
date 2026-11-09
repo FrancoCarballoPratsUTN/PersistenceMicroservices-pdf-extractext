@@ -19,6 +19,18 @@ def load_prefix(
     timeout: float = 5.0,
     ca_file: str | None = None,
 ) -> dict[str, str]:
+    """Lee el prefijo de configuración desde el KV de Consul.
+
+    Args:
+        address: Dirección del agente Consul.
+        token: Token de ACL de Consul.
+        prefix: Prefijo KV bajo el que viven las claves de configuración.
+        timeout: Tiempo de espera en segundos para la petición HTTP.
+        ca_file: Ruta opcional al certificado CA para TLS.
+
+    Returns:
+        Diccionario con las pares clave-valor leídas del prefijo KV de Consul.
+    """
     address = address.strip()
     token = token.strip()
     prefix = prefix.strip().strip("/")
@@ -57,6 +69,15 @@ def load_prefix(
 
 
 def _decode_entry(entry: object, normalized_prefix: str) -> tuple[str, str]:
+    """Decodifica una entrada del KV de Consul en clave y valor.
+
+    Args:
+        entry: Entrada devuelta por la API de Consul KV.
+        normalized_prefix: Prefijo normalizado con el que iniciar la clave.
+
+    Returns:
+        Tupla con la clave (sin el prefijo) y el valor decodificado de base64.
+    """
     try:
         key = entry["Key"]
         encoded = entry["Value"]

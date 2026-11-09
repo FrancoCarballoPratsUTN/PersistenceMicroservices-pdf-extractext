@@ -1,3 +1,9 @@
+"""Middlewares HTTP: tipo de contenido, tamaño del body, request ID y acceso.
+
+Contiene los middlewares que se insertan en la cadena de petición/respuesta de
+FastAPI para aplicar validaciones transversales antes de llegar a los routers.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -25,14 +31,28 @@ REQUEST_ID_PATTERN = re.compile(r"[A-Za-z0-9._-]{1,128}\Z")
 
 
 def _is_json(header: str | None) -> bool:
-    """Dice si una cabecera Content-Type declara JSON, parámetros incluidos."""
+    """Dice si una cabecera Content-Type declara JSON, parámetros incluidos.
+
+    Args:
+        header: Valor de la cabecera ``Content-Type``, o ``None`` si no existe.
+
+    Returns:
+        ``True`` si el tipo de contenido es ``application/json``.
+    """
     if header is None:
         return False
     return header.split(";")[0].strip().lower() == JSON_MEDIA_TYPE
 
 
 def _declared_length(request: Request) -> int:
-    """Devuelve el Content-Length que declaró el llamador, o 0 si no es usable."""
+    """Devuelve el Content-Length que declaró el llamador, o 0 si no es usable.
+
+    Args:
+        request: Petición entrante.
+
+    Returns:
+        Longitud declarada del cuerpo, o 0 si no es usable.
+    """
     raw = request.headers.get("content-length", "")
     return int(raw) if raw.isdigit() else 0
 
@@ -73,10 +93,29 @@ class BodySizeLimitMiddleware:
     """
 
     def __init__(self, app: ASGIApp, *, settings: Settings) -> None:
+        """Guarda el manejador siguiente y el límite de bytes.
+
+        Args:
+            app: El siguiente manejador de la cadena.
+            settings: Aporta el límite en bytes.
+
+        Returns:
+            Ninguno.
+        """
         self._app = app
         self._limit = settings.max_text_body_bytes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Procesa la petición contando el cuerpo recibido.
+
+        Args:
+            scope: Ámbito ASGI de la conexión.
+            receive: Recibe mensajes ASGI entrantes.
+            send: Envía mensajes ASGI salientes.
+
+        Returns:
+            Ninguno.
+        """
         if scope["type"] != "http":
             await self._app(scope, receive, send)
             return
@@ -117,6 +156,16 @@ class BodySizeLimitMiddleware:
         await self._app(scope, replay_body, send)
 
     async def _reject(self, request: Request, receive: Receive, send: Send) -> None:
+        """Rechaza la petición con un error 413 Payload Too Large.
+
+        Args:
+            request: Petición entrante que excede el límite.
+            receive: Recibe mensajes ASGI entrantes.
+            send: Envía mensajes ASGI salientes.
+
+        Returns:
+            Ninguno.
+        """
         response = problem_response(PayloadTooLargeError(), instance_of(request))
         await response(request.scope, receive, send)
 

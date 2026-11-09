@@ -1,3 +1,5 @@
+"""Configuración de logging del servicio con request ID en cada registro."""
+
 import logging
 from typing import Any
 
@@ -13,9 +15,26 @@ class RequestIdLogRecordFactory:
     """Añade el request ID actual a cada registro de logging."""
 
     def __init__(self, original_factory: Any) -> None:
+        """Guarda la fábrica original de registros de logging.
+
+        Args:
+            original_factory: Fábrica de registros de logging a envolver.
+
+        Returns:
+            Ninguno.
+        """
         self._original_factory = original_factory
 
     def __call__(self, *args: Any, **kwargs: Any) -> logging.LogRecord:
+        """Construye un registro de logging añadiendo el request ID actual.
+
+        Args:
+            *args: Argumentos posicionales pasados a la fábrica original.
+            **kwargs: Argumentos nombrados pasados a la fábrica original.
+
+        Returns:
+            El registro de logging con el campo ``request_id`` rellenado.
+        """
         record = self._original_factory(*args, **kwargs)
         record.request_id = request_id_context.get() or "-"
         return record
@@ -27,6 +46,9 @@ def configure_logging(level: str) -> None:
     Args:
         level: Nivel mínimo a registrar, ya validado por la configuración
             (``DEBUG``, ``INFO``, ``WARNING``, ...).
+
+    Returns:
+        Ninguno.
     """
     logging.basicConfig(level=level, format=LOG_FORMAT, datefmt=DATE_FORMAT)
     if not isinstance(logging.getLogRecordFactory(), RequestIdLogRecordFactory):

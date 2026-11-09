@@ -13,10 +13,25 @@ def install_deregister_signal_handlers(
 
     Guarda los manejadores previos y los restaura al devolver el callable de
     limpieza.
+
+    Args:
+        deregister: Callable sin argumentos que ejecuta el deregistro en Consul.
+
+    Returns:
+        Callable sin argumentos que restaura los manejadores de señal previos.
     """
     previous_handlers: dict[int, Any] = {}
 
     def handle_signal(signum: int, frame: Any) -> None:
+        """Maneja una señal: deregistra en Consul y llama al handler previo.
+
+        Args:
+            signum: Número de la señal recibida.
+            frame: Marco de pila asociado a la señal.
+
+        Returns:
+            Ninguno.
+        """
         deregister()
         previous = previous_handlers.get(signum)
         if callable(previous):
@@ -30,6 +45,7 @@ def install_deregister_signal_handlers(
             previous_handlers.pop(sig, None)
 
     def restore() -> None:
+        """Restaura los manejadores de señal previos guardados al instalar."""
         for sig, previous in previous_handlers.items():
             with suppress((ValueError, AttributeError)):
                 signal.signal(sig, previous)

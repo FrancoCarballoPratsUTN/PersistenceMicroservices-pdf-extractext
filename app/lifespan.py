@@ -29,6 +29,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     Arranca la conexión de MongoDB, construye el TextService, registra en Consul
     (si está habilitado) e instala los manejadores de señal para deregistrar al
     apagar. Al finalizar, cierra la conexión de MongoDB limpiamente.
+
+    Args:
+        app: La aplicación FastAPI cuyo ciclo de vida se gestiona.
+
+    Returns:
+        Contexto asíncrono que cede el control mientras la app está activa.
     """
     connection: MongoConnection = app.state.mongo
     logger.info("Starting the service.")

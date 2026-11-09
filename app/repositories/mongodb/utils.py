@@ -11,7 +11,14 @@ ClientFactory = Callable[..., AsyncMongoClient]
 
 
 def redact_uri(uri: str) -> str:
-    """Oculta las credenciales de una URI para que las contraseñas no lleguen al log."""
+    """Oculta las credenciales de una URI para que las contraseñas no lleguen al log.
+
+    Args:
+        uri: URI de MongoDB que puede contener usuario y contraseña.
+
+    Returns:
+        La URI con la contraseña reemplazada por ``****``.
+    """
     parsed = urlsplit(uri)
     if parsed.password:
         return uri.replace(f":{unquote(parsed.password)}@", ":****@")

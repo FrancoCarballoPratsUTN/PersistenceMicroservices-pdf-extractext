@@ -6,5 +6,12 @@ from typing import Any
 
 
 def texts(connection) -> Any:
-    """Devuelve la colección que contiene los textos."""
+    """Devuelve la colección que contiene los textos.
+
+    Args:
+        connection: Conexión a MongoDB.
+
+    Returns:
+        La colección de MongoDB donde se almacenan los textos.
+    """
     return connection._database()[connection._settings.mongo_texts_collection]

@@ -31,6 +31,9 @@ def send_request(
         payload: Cuerpo JSON a enviar, o ``None`` para peticiones sin cuerpo.
         timeout: Tiempo de espera en segundos para cada intento.
         ca_file: Ruta al certificado CA para TLS.
+
+    Returns:
+        Ninguno.
     """
     address = address.strip()
     token = token.strip()

@@ -10,7 +10,16 @@ def _positive_integer(
     variable_name: str,
     default: int,
 ) -> int:
-    """Convierte una variable numérica y comprueba que sea positiva."""
+    """Convierte una variable numérica y comprueba que sea positiva.
+
+    Args:
+        value: Valor de la variable de entorno a convertir.
+        variable_name: Nombre de la variable de entorno (para mensajes de error).
+        default: Valor por defecto cuando la variable está vacía o ausente.
+
+    Returns:
+        El número entero positivo convertido, o el valor por defecto.
+    """
     if value is None or not str(value).strip():
         return default
 
@@ -26,7 +35,15 @@ def _positive_integer(
 
 
 def _log_level(value: str | None, default: str = "INFO") -> str:
-    """Convierte una variable en un nivel de logging válido de la stdlib."""
+    """Convierte una variable en un nivel de logging válido de la stdlib.
+
+    Args:
+        value: Valor de la variable de entorno a convertir.
+        default: Nivel por defecto cuando la variable está vacía o ausente.
+
+    Returns:
+        Nombre del nivel de logging válido (ej. ``DEBUG``, ``INFO``).
+    """
     if value is None or not str(value).strip():
         return default
 
@@ -45,6 +62,12 @@ def _cors_origins(value: str | None) -> tuple[str, ...]:
 
     El valor vacío deja CORS cerrado. El comodín se rechaza porque este servicio
     no necesita exponerse a cualquier origen.
+
+    Args:
+        value: Valor de la variable de entorno con orígenes separados por coma.
+
+    Returns:
+        Tupla de orígenes CORS permitidos, vacía cuando no hay valor.
     """
     if value is None:
         return ()

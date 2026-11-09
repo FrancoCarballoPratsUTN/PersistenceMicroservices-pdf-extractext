@@ -13,5 +13,14 @@ class ServiceError(Exception):
     default_detail: ClassVar[str] = "An unexpected error occurred."
 
     def __init__(self, detail: str | None = None) -> None:
+        """Inicializa el error con un detalle opcional.
+
+        Args:
+            detail: Mensaje de detalle del error. Cuando se omite, se usa el
+                valor por defecto de la clase.
+
+        Returns:
+            Ninguno.
+        """
         self.detail = detail or self.default_detail
         super().__init__(self.detail)

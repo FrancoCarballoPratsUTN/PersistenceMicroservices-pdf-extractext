@@ -45,7 +45,14 @@ def rejection_reason(header: str | None, expected_token: str) -> str | None:
 
 
 def unauthorized_response(request) -> object:
-    """Devuelve el rechazo 401 con desafío WWW-Authenticate (RFC 6750)."""
+    """Devuelve el rechazo 401 con desafío WWW-Authenticate (RFC 6750).
+
+    Args:
+        request: Petición rechazada.
+
+    Returns:
+        Respuesta de problema 401 con cabecera WWW-Authenticate.
+    """
     return problem_response(
         UnauthorizedError(REJECTION_DETAIL),
         instance_of(request),

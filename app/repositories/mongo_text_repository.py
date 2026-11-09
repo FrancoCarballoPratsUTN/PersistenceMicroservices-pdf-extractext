@@ -1,3 +1,9 @@
+"""Repositorio de textos sobre MongoDB: acceso a datos y traducción de errores.
+
+Traduce las excepciones del driver de MongoDB a los errores de dominio del
+servicio y reconstruye textos almacenados a partir de los documentos devueltos.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -21,10 +27,19 @@ logger = logging.getLogger(__name__)
 
 
 def _utcnow() -> datetime:
+    """Devuelve la fecha y hora actuales en UTC."""
     return datetime.now(UTC)
 
 
 def _invalid_stored_fields(document: dict[str, Any]) -> list[str]:
+    """Identifica los campos inválidos de un documento de texto almacenado.
+
+    Args:
+        document: Documento de MongoDB a validar.
+
+    Returns:
+        Lista con los nombres de los campos que no cumplen el tipo esperado.
+    """
     fields = {
         "checksum": (document.get("checksum") or document.get("_id"), str),
         "text": (document.get("text"), str),
@@ -46,7 +61,17 @@ def _invalid_stored_fields(document: dict[str, Any]) -> list[str]:
 
 
 def _to_stored(document: dict[str, Any]) -> StoredText:
-    """Reconstruye un texto y falla si MongoDB devolvió datos incompletos."""
+    """Reconstruye un texto y falla si MongoDB devolvió datos incompletos.
+
+    Args:
+        document: Documento de MongoDB que representa un texto almacenado.
+
+    Returns:
+        Instancia de :class:`StoredText` reconstruida a partir del documento.
+
+    Raises:
+        PersistenceError: Si el documento tiene campos faltantes o inválidos.
+    """
     invalid_fields = _invalid_stored_fields(document)
     if invalid_fields:
         fields = ",".join(invalid_fields)
@@ -70,6 +95,15 @@ def _to_stored(document: dict[str, Any]) -> StoredText:
 
 
 def persistence_error(error: PyMongoError, operation: str) -> PersistenceError:
+    """Registra el error de MongoDB y construye un PersistenceError.
+
+    Args:
+        error: Excepción original de pymongo.
+        operation: Nombre de la operación que falló.
+
+    Returns:
+        Instancia de :class:`PersistenceError` lista para lanzarse.
+    """
     logger.error(
         "MongoDB operation failed operation=%s request_id=%s error_type=%s",
         operation,
@@ -87,15 +121,38 @@ class MongoTextRepository:
     """
 
     def __init__(self, collection: Any) -> None:
+        """Guarda la colección sobre la que operará el repositorio.
+
+        Args:
+            collection: La colección asíncrona que contiene los documentos de
+                texto.
+
+        Returns:
+            Ninguno.
+        """
         self._collection = collection
 
     async def checksum_exists(self, checksum: str) -> bool:
-        """Informa si un checksum ya está almacenado."""
+        """Informa si un checksum ya está almacenado.
+
+        Args:
+            checksum: Checksum del texto a buscar.
+
+        Returns:
+            ``True`` si el checksum ya existe, ``False`` en caso contrario.
+        """
         document = await self._find_one({"_id": checksum}, {"_id": 1})
         return document is not None
 
     async def insert(self, item: StoredText) -> None:
-        """Almacena un texto, rechazando un checksum que ya esté ocupado."""
+        """Almacena un texto, rechazando un checksum que ya esté ocupado.
+
+        Args:
+            item: Texto a almacenar.
+
+        Returns:
+            Ninguno.
+        """
         document = {
             "_id": item.checksum,
             "checksum": item.checksum,
@@ -115,12 +172,27 @@ class MongoTextRepository:
             raise persistence_error(error, "insert") from error
 
     async def get_by_checksum(self, checksum: str) -> StoredText | None:
-        """Devuelve el texto almacenado, o None cuando el checksum es desconocido."""
+        """Devuelve el texto almacenado, o None cuando el checksum es desconocido.
+
+        Args:
+            checksum: Checksum del texto a buscar.
+
+        Returns:
+            El texto almacenado, o ``None`` si el checksum es desconocido.
+        """
         document = await self._find_one({"_id": checksum})
         return _to_stored(document) if document is not None else None
 
     async def update(self, checksum: str, changes: TextChanges) -> StoredText | None:
-        """Aplica los cambios y devuelve el resultado, o None si no existe."""
+        """Aplica los cambios y devuelve el resultado, o None si no existe.
+
+        Args:
+            checksum: Checksum del texto a actualizar.
+            changes: Cambios a aplicar (nombre y metadatos).
+
+        Returns:
+            El texto actualizado, o ``None`` si el checksum no existe.
+        """
         update: dict[str, Any] = {"updated_at": _utcnow()}
         if changes.name is not None:
             update["name"] = changes.name
@@ -139,7 +211,14 @@ class MongoTextRepository:
         return _to_stored(document) if document is not None else None
 
     async def delete(self, checksum: str) -> bool:
-        """Elimina un texto, informando de si había alguno que eliminar."""
+        """Elimina un texto, informando de si había alguno que eliminar.
+
+        Args:
+            checksum: Checksum del texto a eliminar.
+
+        Returns:
+            ``True`` si se eliminó un documento, ``False`` si no existía.
+        """
         try:
             result = await self._collection.delete_one({"_id": checksum})
         except PyMongoError as error:
@@ -149,7 +228,15 @@ class MongoTextRepository:
     async def _find_one(
         self, query: dict[str, Any], projection: dict[str, Any] | None = None
     ) -> dict[str, Any] | None:
-        """Ejecuta una consulta, traduciendo cualquier fallo de MongoDB."""
+        """Ejecuta una consulta, traduciendo cualquier fallo de MongoDB.
+
+        Args:
+            query: Consulta de filtrado para localizar el documento.
+            projection: Proyección opcional de campos a devolver.
+
+        Returns:
+            El documento encontrado, o ``None`` si no hay coincidencia.
+        """
         try:
             return await self._collection.find_one(query, projection=projection)
         except PyMongoError as error:
