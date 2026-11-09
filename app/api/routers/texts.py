@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Request
@@ -16,6 +17,7 @@ from app.services.text_service import TextService
 
 router = APIRouter()
 
+
 @router.get(
     "/texts",
     openapi_extra={
@@ -32,6 +34,7 @@ async def get_text(
 ) -> JSONResponse:
     item = await service.find_by_checksum(require_str(checksum))
     return JSONResponse(content=to_api_dict(item))
+
 
 @router.post(
     "/texts",
@@ -57,6 +60,7 @@ async def create_text(
         headers={"Location": f"/texts?checksum={quote(command.checksum, safe='')}"},
     )
 
+
 @router.put(
     "/texts",
     openapi_extra={
@@ -76,6 +80,7 @@ async def update_text(
     changes = validate_update(await read_json_body(request))
     item = await service.update(require_str(checksum), changes)
     return JSONResponse(content=to_api_dict(item))
+
 
 @router.delete(
     "/texts",

@@ -23,8 +23,7 @@ def log_resource_change(operation: str, checksum: str) -> None:
         checksum: Checksum del texto afectado (se hashea antes de loguear).
     """
     logger.info(
-        "resource_changed operation=%s result=success "
-        "checksum_hash=%s request_id=%s",
+        "resource_changed operation=%s result=success checksum_hash=%s request_id=%s",
         operation,
         checksum_hash(checksum),
         request_id_context.get() or "-",

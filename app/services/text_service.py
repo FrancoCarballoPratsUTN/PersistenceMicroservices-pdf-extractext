@@ -51,15 +51,11 @@ class TextService:
 
     async def find_by_checksum(self, checksum: str) -> StoredText:
         """Devuelve el texto almacenado, o lanza TextNotFoundError."""
-        return require_found(
-            await self._repository.get_by_checksum(checksum), checksum
-        )
+        return require_found(await self._repository.get_by_checksum(checksum), checksum)
 
     async def update(self, checksum: str, changes: TextChanges) -> StoredText:
         """Aplica los cambios y devuelve el texto actualizado."""
-        item = require_found(
-            await self._repository.update(checksum, changes), checksum
-        )
+        item = require_found(await self._repository.update(checksum, changes), checksum)
         log_resource_change("update", checksum)
         return item
 

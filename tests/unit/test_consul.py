@@ -8,10 +8,8 @@ from urllib.error import URLError
 
 import pytest
 
-import app.consul_agent as consul_agent
 import app.consul_registration as consul_registration_module
 import app.consul_request as consul_request_module
-import app.main as main
 from app.consul import ConsulConfigurationError, load_prefix
 from app.consul_agent import deregister_service, register_service
 

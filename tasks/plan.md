@@ -1681,14 +1681,14 @@ Archivos que se dejan sin tocar (150+ líneas, por decisión del usuario):
 
 ### Phase 7d: Verificación final
 
-- [ ] **T7.9: Verificación de límite de 100 líneas en todos los archivos de producción**
+- [x] **T7.9: Verificación de límite de 100 líneas en todos los archivos de producción**
 
 ### Checkpoint Final (Phase 7)
-- [ ] Ningún archivo de `app/` supera 100 líneas (excepto los 150+ dejados por decisión del usuario)
-- [ ] `uv run pytest --cov=app --cov-fail-under=85` pasa
-- [ ] `uv run ruff check .` y `uv run ruff format --check .` pasan
-- [ ] El contrato HTTP del orquestador Go no cambió
-- [ ] Revisión humana aprobada
+- [x] Ningún archivo de `app/` supera 100 líneas (excepto los 150+ dejados por decisión del usuario)
+- [x] `uv run pytest --cov=app --cov-fail-under=85` pasa
+- [x] `uv run ruff check .` y `uv run ruff format --check .` pasan
+- [x] El contrato HTTP del orquestador Go no cambió
+- [x] Revisión humana aprobada
 
 ---
 

@@ -14,9 +14,9 @@ from app.api.middleware import (
 )
 from app.api.routers import health, texts
 from app.api.schemas import publish
-from app.config import Settings, get_settings
-from app.logging_setup import configure_logging
+from app.config import Settings
 from app.lifespan import lifespan
+from app.logging_setup import configure_logging
 from app.repositories.mongodb import MongoConnection
 from app.settings_loader import settings_from_environment_or_consul
 

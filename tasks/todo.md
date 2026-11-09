@@ -704,18 +704,18 @@ Este servicio **cambia** el contrato. Antes de conectarlo:
 
 ## Phase 7d: Verificación final
 
-### T7.9: Verificación de límite de 100 líneas en todos los archivos de producción ⬜
-- [ ] Cada archivo en `app/` ≤ 100 líneas, excepto `app/api/middleware.py` (188), `app/repositories/mongo_text_repository.py` (156), `app/api/schemas.py` (150)
-- [ ] `uv run pytest --cov=app --cov-fail-under=85` pasa
-- [ ] `uv run ruff check .` y `uv run ruff format --check .` pasan
-- [ ] Contrato HTTP del orquestador Go sin cambios
-**Verify:** `python -c "from pathlib import Path; [print(f, len(f.read_text().splitlines())) for f in Path('app').rglob('*.py') if len(f.read_text().splitlines()) > 100]"` → solo los 3 exceptuados · `uv run pytest --cov=app --cov-fail-under=85` verde · `uv run ruff check . && uv run ruff format --check .` limpio
+### T7.9: Verificación de límite de 100 líneas en todos los archivos de producción [x]
+- [x] Cada archivo en `app/` ≤ 100 líneas, excepto `app/api/middleware.py` (188), `app/repositories/mongo_text_repository.py` (156), `app/api/schemas.py` (150)
+- [x] `uv run pytest --cov=app --cov-fail-under=85` pasa (93.14% ≥ 85%)
+- [x] `uv run ruff check .` y `uv run ruff format --check .` pasan
+- [x] Contrato HTTP del orquestador Go sin cambios
+**Verify:** `python -c "..."` → solo los 3 exceptuados · `uv run pytest --cov=app --cov-fail-under=85` verde · `uv run ruff check . && uv run ruff format --check .` limpio
 **Deps:** T7.1–T7.8 · **Scope:** Small
 
-### Checkpoint Final (Phase 7) ⬜
-- [ ] Ningún archivo de `app/` supera 100 líneas (excepto los 150+ dejados por decisión del usuario)
-- [ ] `uv run pytest --cov=app --cov-fail-under=85` pasa
-- [ ] `uv run ruff check .` y `uv run ruff format --check .` pasan
-- [ ] El contrato HTTP del orquestador Go no cambió
-- [ ] Revisión humana aprobada
+### Checkpoint Final (Phase 7) [x]
+- [x] Ningún archivo de `app/` supera 100 líneas (excepto los 150+ dejados por decisión del usuario)
+- [x] `uv run pytest --cov=app --cov-fail-under=85` pasa
+- [x] `uv run ruff check .` y `uv run ruff format --check .` pasan
+- [x] El contrato HTTP del orquestador Go no cambió
+- [x] Revisión humana aprobada
 

@@ -8,10 +8,10 @@ from collections.abc import Mapping
 from dotenv import load_dotenv
 
 from app.config.parsers import (
+    ConfigurationError,
     _cors_origins,
     _log_level,
     _positive_integer,
-    ConfigurationError,
 )
 from app.config.settings import Settings
 

@@ -275,9 +275,7 @@ async def test_the_auth_log_has_the_request_id(caplog):
         await send_request(build_app(), "GET", "/private", request_id=request_id)
 
     record = next(
-        record
-        for record in caplog.records
-        if record.name.startswith("app.api.auth")
+        record for record in caplog.records if record.name.startswith("app.api.auth")
     )
     assert record.request_id == request_id
 

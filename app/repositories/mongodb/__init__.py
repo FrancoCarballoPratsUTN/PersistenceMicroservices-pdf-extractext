@@ -1,7 +1,7 @@
 """MongoDB: cliente y acceso a colecciones.
 
-Se mantiene como paquete para que ``from app.repositories.mongodb import MongoConnection``
-siga funcionando sin cambios.
+Mantiene ``from app.repositories.mongodb import MongoConnection``
+funcionando sin cambios.
 """
 
 from time import monotonic

@@ -1,10 +1,9 @@
 """Manejadores de señal para deregistro graceful en Consul."""
 
+import signal
 from collections.abc import Callable
 from contextlib import suppress
 from typing import Any
-
-import signal
 
 
 def install_deregister_signal_handlers(
@@ -27,7 +26,7 @@ def install_deregister_signal_handlers(
         try:
             previous_handlers[sig] = signal.getsignal(sig)
             signal.signal(sig, handle_signal)
-        except (ValueError, AttributeError):
+        except ValueError, AttributeError:
             previous_handlers.pop(sig, None)
 
     def restore() -> None:
