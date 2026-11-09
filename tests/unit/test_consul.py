@@ -10,6 +10,7 @@ import pytest
 
 import app.consul_agent as consul_agent
 import app.consul_registration as consul_registration_module
+import app.consul_request as consul_request_module
 import app.main as main
 from app.consul import ConsulConfigurationError, load_prefix
 from app.consul_agent import deregister_service, register_service
@@ -175,7 +176,7 @@ def test_registration_retries_a_transient_server_error(monkeypatch):
         def log_message(self, *_):
             pass
 
-    monkeypatch.setattr(consul_agent, "sleep", lambda _: None)
+    monkeypatch.setattr(consul_request_module, "sleep", lambda _: None)
     with consul_server(Handler) as address:
         register(address)
 
@@ -195,7 +196,7 @@ def test_registration_stops_after_three_transient_server_errors(monkeypatch):
         def log_message(self, *_):
             pass
 
-    monkeypatch.setattr(consul_agent, "sleep", lambda _: None)
+    monkeypatch.setattr(consul_request_module, "sleep", lambda _: None)
     with (
         consul_server(Handler) as address,
         pytest.raises(ConsulConfigurationError, match="HTTP 500"),
@@ -218,7 +219,7 @@ def test_registration_does_not_retry_a_client_error(monkeypatch):
         def log_message(self, *_):
             pass
 
-    monkeypatch.setattr(consul_agent, "sleep", lambda _: None)
+    monkeypatch.setattr(consul_request_module, "sleep", lambda _: None)
     with (
         consul_server(Handler) as address,
         pytest.raises(ConsulConfigurationError, match="HTTP 400"),
@@ -247,8 +248,8 @@ def test_registration_retries_a_connection_abort(monkeypatch):
             raise ConnectionAbortedError("connection aborted")
         return Response()
 
-    monkeypatch.setattr(consul_agent, "urlopen", flaky_urlopen)
-    monkeypatch.setattr(consul_agent, "sleep", lambda _: None)
+    monkeypatch.setattr(consul_request_module, "urlopen", flaky_urlopen)
+    monkeypatch.setattr(consul_request_module, "sleep", lambda _: None)
 
     register_service(
         "http://consul.example",
@@ -267,8 +268,8 @@ def test_registration_wraps_a_persistent_network_error(monkeypatch):
     def broken_urlopen(*_args, **_kwargs):
         raise URLError("offline")
 
-    monkeypatch.setattr(consul_agent, "urlopen", broken_urlopen)
-    monkeypatch.setattr(consul_agent, "sleep", lambda _: None)
+    monkeypatch.setattr(consul_request_module, "urlopen", broken_urlopen)
+    monkeypatch.setattr(consul_request_module, "sleep", lambda _: None)
 
     with pytest.raises(
         ConsulConfigurationError,

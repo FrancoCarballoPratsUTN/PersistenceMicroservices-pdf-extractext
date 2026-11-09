@@ -1,13 +1,8 @@
-import json
-import ssl
-from time import sleep
-from urllib.error import HTTPError
-from urllib.request import Request, urlopen
+"""Registro y deregistro del servicio en Consul (orquestadores)."""
 
-from app.consul import ConsulConfigurationError
+from __future__ import annotations
 
-_MAX_ATTEMPTS = 3
-_BACKOFF_SECONDS = 0.1
+from app.consul_request import send_request
 
 
 def register_service(
@@ -23,23 +18,25 @@ def register_service(
     timeout: float = 5.0,
     ca_file: str | None = None,
 ) -> None:
-    _request(
+    """Registra el servicio actual en el agente Consul."""
+    payload = {
+        "ID": service_id,
+        "Name": service_name,
+        "Address": service_address,
+        "Port": service_port,
+        "Tags": tags or [],
+        "Check": {
+            "HTTP": check_url,
+            "Interval": "10s",
+            "Timeout": "3s",
+            "DeregisterCriticalServiceAfter": "1m",
+        },
+    }
+    send_request(
         address,
         token,
         "/v1/agent/service/register",
-        {
-            "ID": service_id,
-            "Name": service_name,
-            "Address": service_address,
-            "Port": service_port,
-            "Tags": tags or [],
-            "Check": {
-                "HTTP": check_url,
-                "Interval": "10s",
-                "Timeout": "3s",
-                "DeregisterCriticalServiceAfter": "1m",
-            },
-        },
+        payload,
         timeout,
         ca_file,
     )
@@ -53,9 +50,12 @@ def deregister_service(
     timeout: float = 5.0,
     ca_file: str | None = None,
 ) -> None:
+    """Deregistra el servicio actual del agente Consul."""
     if not service_id.strip():
+        from app.consul import ConsulConfigurationError
+
         raise ConsulConfigurationError("CONSUL_SERVICE_ID must not be empty")
-    _request(
+    send_request(
         address,
         token,
         f"/v1/agent/service/deregister/{service_id}",
@@ -63,46 +63,3 @@ def deregister_service(
         timeout,
         ca_file,
     )
-
-
-def _request(
-    address: str,
-    token: str,
-    path: str,
-    payload: dict[str, object] | None,
-    timeout: float,
-    ca_file: str | None,
-) -> None:
-    address = address.strip()
-    token = token.strip()
-    if not address or not token:
-        raise ConsulConfigurationError(
-            "CONSUL_HTTP_ADDR and CONSUL_HTTP_TOKEN are required"
-        )
-
-    body = None if payload is None else json.dumps(payload).encode()
-    request = Request(
-        f"{address.rstrip('/')}{path}",
-        data=body,
-        method="PUT",
-        headers={"X-Consul-Token": token, "Content-Type": "application/json"},
-    )
-    context = ssl.create_default_context(cafile=ca_file) if ca_file else None
-
-    for attempt in range(_MAX_ATTEMPTS):
-        try:
-            with urlopen(request, timeout=timeout, context=context) as response:
-                response.read()
-            return
-        except HTTPError as error:
-            if error.code < 500 or attempt == _MAX_ATTEMPTS - 1:
-                raise ConsulConfigurationError(
-                    f"Consul service request returned HTTP {error.code}"
-                ) from error
-        except OSError as error:
-            if attempt == _MAX_ATTEMPTS - 1:
-                raise ConsulConfigurationError(
-                    "unable to update Consul service registry"
-                ) from error
-
-        sleep(_BACKOFF_SECONDS * (2**attempt))
