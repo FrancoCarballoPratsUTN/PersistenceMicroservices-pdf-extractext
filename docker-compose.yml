@@ -8,9 +8,9 @@
 # Inicio:
 #     docker compose up --build -d
 #
-# El servicio también se publica en el host en el puerto que el orquestador
-# espera (`PERSISTENCE_BASE_URL = http://localhost:8082`):
+# El servicio se publica en el host sólo para depuración directa:
 #     curl http://localhost:8082/health
+# El orquestador NO usa este puerto: llega por el Traefik compartido (E-W).
 #
 # El Traefik compartido lo enruta a través de TLS:
 #     curl -k https://persistence.universidad.localhost/health
@@ -34,12 +34,24 @@ services:
       MONGO_TIMEOUT_MS: ${MONGO_TIMEOUT_MS:-5000}
       MAX_TEXT_BODY_BYTES: ${MAX_TEXT_BODY_BYTES:-10485760}
       APP_NAME: ${APP_NAME:-Persistence Microservice}
+      # false => toda la configuración sale de este entorno. true => Consul KV.
+      CONSUL_ENABLED: ${CONSUL_ENABLED:-false}
+      CONSUL_HTTP_ADDR: ${CONSUL_HTTP_ADDR:-}
+      CONSUL_HTTP_TOKEN: ${CONSUL_HTTP_TOKEN:-}
+      CONSUL_HTTP_CA_FILE: ${CONSUL_HTTP_CA_FILE:-}
+      CONSUL_KV_PREFIX: ${CONSUL_KV_PREFIX:-}
     labels:
       - traefik.enable=true
       - traefik.http.routers.persistence.rule=Host(`persistence.universidad.localhost`)
       - traefik.http.routers.persistence.entrypoints=https
       - traefik.http.routers.persistence.tls=true
       - traefik.http.services.persistence.loadbalancer.server.port=8000
+      # Healthcheck activo de Traefik: no enruta tráfico a una réplica que no
+      # esté lista (Mongo disponible). La imagen no incluye cliente HTTP, por
+      # eso la sonda se declara en Traefik y no como HEALTHCHECK del contenedor.
+      - traefik.http.services.persistence.loadbalancer.healthcheck.path=/readyz
+      - traefik.http.services.persistence.loadbalancer.healthcheck.interval=10s
+      - traefik.http.services.persistence.loadbalancer.healthcheck.timeout=3s
       - traefik.docker.network=mired
     networks:
       - mired
