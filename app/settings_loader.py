@@ -3,7 +3,7 @@
 import os
 
 from app.config import Settings, get_settings
-from app.consul import load_prefix
+from app.services.consul import load_prefix
 
 
 def settings_from_environment_or_consul() -> Settings:

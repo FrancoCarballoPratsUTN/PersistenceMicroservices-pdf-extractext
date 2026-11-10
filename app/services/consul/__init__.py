@@ -1,7 +1,8 @@
-"""es el cliente minimalista de Consul KV que se usa al arranque del servicio para leer la configuración.
+"""Cliente minimalista de Consul KV para leer la configuración al arranque.
 
-arma la URL con la dirección de Consul, envía el encabezado X-Consul-Token, parsea el JSON de respuesta, 
-y para cada entrada extrae la clave (quitando el prefijo) y decodifica el valor de base64 a texto.
+Arma la URL con la dirección de Consul, envía el encabezado X-Consul-Token,
+parsea el JSON de respuesta y, para cada entrada, extrae la clave (quitando
+el prefijo) y decodifica el valor de base64 a texto.
 """
 
 import base64

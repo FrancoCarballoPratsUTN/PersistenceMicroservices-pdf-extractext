@@ -8,10 +8,10 @@ from urllib.error import URLError
 
 import pytest
 
-import app.consul_registration as consul_registration_module
-import app.consul_request as consul_request_module
-from app.consul import ConsulConfigurationError, load_prefix
-from app.consul_agent import deregister_service, register_service
+import app.services.consul.registration as consul_registration_module
+import app.services.consul.request as consul_request_module
+from app.services.consul import ConsulConfigurationError, load_prefix
+from app.services.consul.agent import deregister_service, register_service
 
 PREFIX = "pdf-extractext/dev/persistence/"
 TOKEN = "service-token"

@@ -9,13 +9,13 @@ from time import perf_counter
 
 from fastapi import FastAPI
 
-from app.consul_agent import deregister_service
-from app.consul_registration import (
+from app.repositories.mongo_text_repository import MongoTextRepository
+from app.repositories.mongodb import MongoConnection
+from app.services.consul.agent import deregister_service
+from app.services.consul.registration import (
     consul_registration,
     register_service_off_event_loop,
 )
-from app.repositories.mongo_text_repository import MongoTextRepository
-from app.repositories.mongodb import MongoConnection
 from app.services.text_service import TextService
 from app.signal_handlers import install_deregister_signal_handlers
 

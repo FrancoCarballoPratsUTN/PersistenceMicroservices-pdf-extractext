@@ -8,7 +8,7 @@ from time import sleep
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from app.consul import ConsulConfigurationError
+from app.services.consul import ConsulConfigurationError
 
 _MAX_ATTEMPTS = 3
 _BACKOFF_SECONDS = 0.1

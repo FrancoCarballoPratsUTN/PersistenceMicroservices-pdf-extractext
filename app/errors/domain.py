@@ -1,4 +1,4 @@
-"""Errores de dominio de negocio (4xx de reglas del servicio)."""
+"""Errores de dominio de negocio (reglas del servicio)."""
 
 from app.errors.base import ServiceError
 

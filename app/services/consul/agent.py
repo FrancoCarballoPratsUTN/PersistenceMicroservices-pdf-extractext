@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from app.consul_request import send_request
+from app.services.consul import ConsulConfigurationError
+from app.services.consul.request import send_request
 
 
 def register_service(
@@ -79,8 +80,6 @@ def deregister_service(
         Ninguno.
     """
     if not service_id.strip():
-        from app.consul import ConsulConfigurationError
-
         raise ConsulConfigurationError("CONSUL_SERVICE_ID must not be empty")
     send_request(
         address,

@@ -4,7 +4,7 @@ import asyncio
 import os
 import socket
 
-from app.consul_agent import deregister_service, register_service
+from app.services.consul.agent import deregister_service, register_service
 
 
 def consul_registration() -> dict[str, object] | None:
